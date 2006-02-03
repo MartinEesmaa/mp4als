@@ -1,0 +1,33 @@
+diff mp4alsRM16/src/decoder.cpp mp4alsRM16fixed/src/decoder.cpp
+435c435
+< 				RAUsize[r] = ReadULongMSBfirst(fpOutput);
+---
+> 				RAUsize[r] = ReadULongMSBfirst(fpInput);
+diff mp4alsRM16/src/encoder.cpp mp4alsRM16fixed/src/encoder.cpp
+822,827d821
+< 	if (RA && (RAflag == 2))		// save random access info in header
+< 	{
+< 		for (r = 0; r < RAUnits; r++)
+< 			WriteULongMSBfirst(RAUsize[r], fpOutput);
+< 	}
+< 
+833a828,833
+> 	if (RA && (RAflag == 2))		// save random access info in header
+> 	{
+> 		for (r = 0; r < RAUnits; r++)
+> 			WriteULongMSBfirst(RAUsize[r], fpOutput);
+> 	}
+> 
+905c905
+< 	if ((RAmode < 0) || (RAmode < 2))
+---
+> 	if ((RAmode < 0) || (RAmode > 2))
+1200,1201c1200,1204
+< 				RAUsize[RAUid] = ra_bytes;		
+< 				RAUid++;
+---
+> 				if (fid > 1)
+> 				{
+> 					RAUsize[RAUid] = ra_bytes;		
+> 					RAUid++;
+> 				}
