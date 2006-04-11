@@ -1,52 +1,55 @@
 -------------------------------------------------------
-MPEG-4 Audio Lossless Coding - RM16
+MPEG-4 Audio Lossless Coding - RM17
 -------------------------------------------------------
-ftp://ftlabsrv.nue.tu-berlin.de/mp4lossless/rm16
+ftp://ftlabsrv.nue.tu-berlin.de/mp4lossless/rm17
 -------------------------------------------------------
+Noboru Harada (NTT)
 Tilman Liebchen (Technical University of Berlin)
 -------------------------------------------------------
-Last modified: November 8, 2005
+Last modified: April 11, 2006
 -------------------------------------------------------
 
 Files and Directories
 ---------------------
-/bin/win      - codec binary for Windows (/Release/mp4alsRM16.exe)
-/Release      - object files required for adaptive prediction order:
+/bin/win      - codec binary for Windows (/Release/mp4alsRM17.exe)
+/lib          - object files required for adaptive prediction order:
                 lpc_adapt.obj (Windows), linux/lpc_adapt.o, mac/lpc_adapt.o
-/src          - reference model 16 source code
-Makefile      - Makefile for Linux/Mac (gcc 3.3.3)
+/src          - reference model 17 source code
+Makefile      - Makefile for Linux/Mac (GCC)
 mp4als.dsp    - MSVC 6.0 project file
 mp4als.dsw    - MSVC 6.0 workspace file
+mp4als.vcproj - Visual Studio .NET VC++ project file
+mp4als.sln    - Visual Studio .NET solution file
 
-RM16 Notes
+RM17 Notes
 ----------
 - The ALS reference software is not optimized, particularly not in terms
   of encoder speed.
 - The algorithm for an adaptive choice of the prediction order is not
-  supplied as source code, but there are some object files (see below).
+  supplied as source code, but provided as an object file (Win/Linux/Mac).
 - Please report problems or bugs to T. Liebchen (liebchen@nue.tu-berlin.de)
 
 Instructions
 ------------
-- Windows: Use Visual Studio workspace file 'mp4als.dsw'. The object file 
-  'lpc_adapt.obj' for adaptive prediction order is automatically included.
-- Linux: Use 'Makefile'. The object file 'Release/linux/lpc_adapt.o' for
-  adaptive prediction has to be copied into the 'src' directory.
-- Mac: Use 'Makefile'. The object file 'Release/mac/lpc_adapt.o' for
-  adaptive prediction has to be copied into the 'src' directory.
+- Windows: Use Visual Studio 6 workspace file 'mp4als.dsw' or Visual Studio
+  .NET solution file 'mp4als.sln'.
+- Linux/Mac: Use 'Makefile', i.e. type 'make [linux|mac]'
+- If the provided Visual Studio files or makefiles are used, the object file
+  for adaptive prediction order is automatically included
 - Uncomment '#define LPC_ADAPT' in encoder.cpp if you do not wish to use
   the object files, or if linking of 'lpc_adapt.o' fails (Linux/Mac).
-  In that case, you also have to delete 'lpc_adapt.o' in the first
-  line of 'src/Makefile' (adaptive prediction order will be disabled).
 
 Further Resources
 -----------------
-- The technical specification of MPEG-4 ALS is currently available for MPEG
-  members at http://mpeg.nist.gov in the following document: 
-  ISO/IEC JTC1/SC29/WG11 (MPEG), Document N7364, 
-  "Text of 14496-3:2001/FDAM 4, Audio Lossless Coding (ALS), 
+- The technical specification of MPEG-4 ALS is available at http://www.iso.org
+  in the following document: ISO/IEC 14496-3:2005/Amd 2:2006,
+  "Audio Lossless Coding (ALS), new audio profiles and BSAC extensions"
+- The identical text is also available for MPEG members at http://mpeg.nist.gov
+  in document N7364, "Text of 14496-3:2001/FDAM 4, Audio Lossless Coding (ALS), 
   new audio profiles and BSAC extensions", Poznan, Poland, July 2005
-- The final standard document will be available at http://www.iso.org
+- The Reference software also implements the corrigenda specified in document
+  N8166, "Text of ISO/IEC 14496-3:2005/AMD2:2006/DCOR2, ALS", Montreux, 
+  Switzerland, April 2006, available for MPEG members at http://mpeg.nist.gov
 - A "Verification Report on MPEG-4 ALS" is publicly available at 
   http://www.chiariglione.org/mpeg/working_documents/mpeg-04/audio/als_vt.zip
 - For latest information and updates on MPEG-4 ALS please visit 

@@ -104,6 +104,12 @@ contents : Floating-point PCM support
  * 10/08/2005, Noboru Harada <n-harada@theory.brl.ntt.co.jp>
  *   - fixed an endian related bug.
  *
+ * 11/20/2005, Noboru Harada <n-harada@theory.brl.ntt.co.jp>
+ *   - bug fix in EstimateMultiplier()
+ *
+ * 11/30/2005, Noboru Harada <n-harada@theory.brl.ntt.co.jp>
+ *   - fixed decoding FAILED when compild with .net2003.
+ *
  ************************************************************************/
 
 #include	<cstdio>
@@ -249,6 +255,33 @@ void	CIEEE32::Set( float Value )
 	} else {
 		// NaN
 		m_mantissa = reinterpret_cast<unsigned long&>( Value ) & 0x007fffffUL;
+	}
+}
+
+
+////////////////////////////////////////
+//                                    //
+// Set ulong value to CIEEE32 object  //
+//                                    //
+////////////////////////////////////////
+// Value = Float value to set as long
+void	CIEEE32::Set( unsigned long Value )
+{
+	*reinterpret_cast<unsigned long*>( &m_floatnum ) = Value;
+	if ( ( Value & 0x80000000UL ) == 0 )
+		m_sign = 0;
+	else
+		m_sign = 1;
+	m_exp = (int)( ( ( Value >> 23 ) & 0xff ) - IEEE754_EXP_BIASED );
+	if ( m_exp == -IEEE754_EXP_BIASED ) {
+		// denormalized number
+		m_mantissa = Value & 0x007fffffUL;
+	} else if ( m_exp <= IEEE754_EXP_BIASED ) {
+		// set highest bit to 1
+		m_mantissa = ( Value & 0x007fffffUL ) | 0x00800000UL;
+	} else {
+		// NaN
+		m_mantissa = Value & 0x007fffffUL;
 	}
 }
 
@@ -1280,7 +1313,7 @@ bool	CFloat::FindDiffFloatPCM( long** ppLongBuf, long FrameSize )
 			// Sample loop
 			for( iSample=0; iSample<FrameSize; iSample++ ) {
 				if ( ppLongBuf[iChannel][iSample] == 0 ) {
-					FloatNum.Set( m_ppFloatBuf[iChannel][iSample] );
+					FloatNum.Set( reinterpret_cast<unsigned long&>(m_ppFloatBuf[iChannel][iSample]) );
 					FloatNum.Store( m_ppCBuffD[iChannel*FrameSize+iSample], true );
 					m_ppIEEE32numPCM[iChannel][iSample].Set( 0.f );
 				} else {
@@ -1295,7 +1328,7 @@ bool	CFloat::FindDiffFloatPCM( long** ppLongBuf, long FrameSize )
 			Scale = CIEEE32::PowOfTwo( m_IntRes - 1 - ( m_pShiftBit[iChannel] - IEEE754_EXP_BIASED ) );
 			for( iSample=0; iSample<FrameSize; iSample++ ) {
 				if ( ppLongBuf[iChannel][iSample] == 0 ) {
-					FloatNum.Set( m_ppFloatBuf[iChannel][iSample] );
+					FloatNum.Set( reinterpret_cast<unsigned long&>(m_ppFloatBuf[iChannel][iSample]) );
 					FloatNum.Store( m_ppCBuffD[iChannel*FrameSize+iSample], true );
 					m_ppIEEE32numPCM[iChannel][iSample].Set( 0.f );
 				} else {
@@ -1701,7 +1734,7 @@ void	CFloat::ConvertFloatToRBuff( unsigned char* pRawBuf, long FrameSize )
 
 	for( iChannel=0; iChannel<m_Channels; iChannel++ ) {
 		for( iSample=0; iSample<FrameSize; iSample++ ) {
-			fx.Set( m_ppAcfBuff[iChannel][iSample] );
+			fx.Set( reinterpret_cast<unsigned long&>(m_ppAcfBuff[iChannel][iSample]) );
 			fx.Store( &pRawBuf[ ( iSample * m_Channels + iChannel ) * IEEE754_BYTES_PER_SAMPLE ] );
 		}
 	}
@@ -2569,9 +2602,11 @@ int	CFloat::EstimateMultiplier( const float* x, long FrameSize, float* agcd, int
 					nm_med = nm_low/g_low + nm_high/g_high;
 					dn_med = dn_low/g_low + dn_high/g_high;
 				} else if ( dn_low >= dn_high ) {
+					nm_med = dn_med = 1;
 					Convergent( nm_low/g_low, dn_low/g_low, nm_high/g_high, dn_high/g_high, CONVERGENT_LOW, &nm_med, &dn_med );
 				} else {
-					Convergent( nm_high/g_high, dn_high, nm_low/g_low, dn_low/g_low, CONVERGENT_HIGH, &nm_med, &dn_med );
+					nm_med = dn_med = 1;
+					Convergent( nm_high/g_high, dn_high/g_high, nm_low/g_low, dn_low/g_low, CONVERGENT_HIGH, &nm_med, &dn_med );
 				}
 				nm_res[i] = nm_med;
 				res[i].m_dn = dn_med;

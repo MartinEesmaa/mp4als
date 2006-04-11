@@ -51,6 +51,6 @@ contents : Header file for cmdline.cpp
  *************************************************************************/
 
 short CheckOption(short argc, char **argv, char *opt);
-long GetOptionValue(short argc, char **argv, char *opt);
+long GetOptionValue(short argc, char **argv, char *opt, long default_value = 0);
 long GetOptionValues(short argc, char **argv, char *opt, long N, unsigned short *val);
 bool GetFOption( short argc, char** argv, short& AcfMode, float& AcfValue, short& MlzMode );

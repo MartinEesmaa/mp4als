@@ -65,6 +65,9 @@
  * 02/07/2005, Tilman Liebchen <liebchen@nue.tu-berlin.de>
  *   - further check of b parameter in bgmc_encode_blocks()/bgmc_decode_blocks()
  *
+ * 11/20/2005, Noboru Harada <n-harada@theory.brl.ntt.co.jp>
+ *   - Bug fix in get_bits() in case of len==0.
+ *
  *************************************************************************/
 
 #ifdef WIN32
@@ -170,6 +173,8 @@ unsigned int get_bits (int len, BITIO *p)
     register UINT64 bits;
     register unsigned int l;
 
+	if ( len == 0 )
+		return 0;
     /* check args */
     assert(p != 0);
     assert(p->pbs != 0);

@@ -264,10 +264,17 @@ short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo)
 {
 	BYTE tmp;
 	long i;
+	ULONG als_id;
 
 	// Read ALS header information ////////////////////////////////////////////////////////////////
+	als_id = ReadULongMSBfirst(fpInput);		// ALS identifier: 'ALS' + 0x00 (= 0x414C5300)
+	if (als_id != 0x414C5300UL)
+		return(1);
+
 	Freq = ReadULongMSBfirst(fpInput);			// sampling frequency
 	Samples = ReadULongMSBfirst(fpInput);		// samples
+	if (Samples == 0xFFFFFFFF)
+		return(1);
 	Chan = ReadUShortMSBfirst(fpInput) + 1;		// channels
 	
 	fread(&tmp, 1, 1, fpInput);
@@ -338,8 +345,12 @@ short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo)
 		delete [] buff;
 	}
 
-	HeaderSize = ReadUShortMSBfirst(fpInput);	// header size
-	TrailerSize = ReadUShortMSBfirst(fpInput);	// trailer size
+	HeaderSize = ReadULongMSBfirst(fpInput);	// header size
+	if (HeaderSize == 0xFFFFFFFF)
+		HeaderSize = 0;
+	TrailerSize = ReadULongMSBfirst(fpInput);	// trailer size
+	if (TrailerSize == 0xFFFFFFFF)
+		TrailerSize = 0;
 	// End of header information //////////////////////////////////////////////////////////////////
 
 	// Set parameter structure
@@ -438,7 +449,9 @@ long CLpacDecoder::WriteHeader()
 
 	if (AUXenabled)	// aux data present
 	{
-		long size = ReadUShortMSBfirst(fpInput);	// size of aux data
+		unsigned long size = ReadULongMSBfirst(fpInput);	// size of aux data
+		if (size == 0xFFFFFFFF)
+			size = 0;
 		fseek(fpInput, size, SEEK_CUR);				// skip aux data
 	}
 
@@ -524,7 +537,7 @@ long CLpacDecoder::WriteHeader()
 	return(frames);
 }
 
-short CLpacDecoder::WriteTrailer()
+long CLpacDecoder::WriteTrailer()
 {
 	if (fpOutput != NULL)
 		if (fwrite(buff, 1, TrailerSize, fpOutput) != TrailerSize) return(-1);
@@ -532,15 +545,15 @@ short CLpacDecoder::WriteTrailer()
 	CRC ^= CRC_MASK;
 	CRC -= CRCorg;		// CRC = 0 if decoding was successful
 
-	return(TrailerSize);
+	return(0);
 }
 
-short CLpacDecoder::DecodeAll()
+long CLpacDecoder::DecodeAll()
 {
 	long f;
 
 	if ((frames = WriteHeader()) < 1)
-		return((short)frames);
+		return(frames);
 
 	// Main loop for all frames
 	for (f = 0; f < frames; f++)

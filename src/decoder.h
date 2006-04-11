@@ -114,8 +114,8 @@ protected:
 	unsigned char SampleType;	// Sample type (0=int, 1=float)
 	unsigned long Samples;	// Number of samples (per channel)
 	long Freq;				// Sampling frequency
-	short HeaderSize;		// Length of file header (in bytes)
-	short TrailerSize;		// Number of trailing non-audio bytes
+	unsigned long HeaderSize;	// Length of file header (in bytes)
+	unsigned long TrailerSize;	// Number of trailing non-audio bytes
 
 	long frames;			// Number of frames
 	long fid;				// Current frame
@@ -160,15 +160,10 @@ public:
 	short AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo);
 	short OpenOutputFile(const char *name);
 	long WriteHeader();
-	short WriteTrailer();
-	short DecodeAll();
+	long WriteTrailer();
+	long DecodeAll();
 	short DecodeFrame();		// Decode one frame
 	unsigned long GetCRC();
-
-	//void GetFilePositions(long *SizeIn, long *SizeOut);
-	//short GetFrameSize();		// Frame size (in bytes)
-	//long GetOrgFileSize();		// Size of wave file (in bytes)
-	//long GetPacFileSize();		// Size of pac file (in bytes)
 
 protected:
 	short DecodeBlock(long *x, long Nb, short ra);			// Decode one block

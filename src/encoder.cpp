@@ -364,12 +364,12 @@ short CLpacEncoder::AnalyseInputFile(AUDIOINFO *ainfo)
 	else	// Analyze input file (try wave format first)
 	{
 		HeaderSize = GetWaveFormatPCM(fpInput, &wf, &Samples);
-		if (HeaderSize < 0)
+		if (HeaderSize == 0)
 		{
 			// Try aiff format
 			rewind(fpInput);
 			HeaderSize = GetAiffFormat(fpInput, &ac, &Offset, &BlockSize, &samplerate);
-			if (HeaderSize < 0)
+			if (HeaderSize == 0)
 				return(-1);
 			else
 			{
@@ -427,10 +427,10 @@ short CLpacEncoder::AnalyseInputFile(AUDIOINFO *ainfo)
 		// Check lengths
 		if (FileLen - HeaderSize < DataLen)				// File is shorter than specified
 			return(-1);
-		if (FileLen - DataLen - HeaderSize > 32767)		// More than 32767 remaining bytes
-			return(-1);
+		//if (FileLen - DataLen - HeaderSize > 32767)		// More than 32767 remaining bytes
+		//	return(-1);
 		else
-			TrailerSize = (short)(FileLen - DataLen - HeaderSize);
+			TrailerSize = FileLen - DataLen - HeaderSize;
 	}
 
 	// Check parameters
@@ -530,6 +530,9 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	Adapt = 0;
 #endif
 
+	if (P == 0)
+		Adapt = 0;			// force fixed order
+
 	// Channel configuration
 	CPE = Chan / 2;		// Channel Pair Elements
 	SCE = Chan % 2;		// Single Channel Elements
@@ -555,7 +558,7 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 		ChanSort = 0;
 
 	// Adjust frame length automatically
-	if (N == 0)
+	if ((N == 0) || (N % (1<<Sub)))
 	{
 		if (Freq > 96000L)
 			N = 8192;
@@ -728,6 +731,9 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	}
 
 	// Write ALS header information ///////////////////////////////////////////////////////////////
+	ULONG als_id;
+	als_id = 0x414C5300UL;
+	WriteULongMSBfirst(als_id, fpOutput);							// 'ALS' + 0x00
 	WriteULongMSBfirst((ULONG)Freq, fpOutput);						// sampling frequency
 	WriteULongMSBfirst(Samples, fpOutput);							// samples
 	WriteUShortMSBfirst(USHORT(Chan - 1), fpOutput);				// channels
@@ -767,8 +773,8 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 		if (fwrite(buff, 1, size, fpOutput) != size) return(frames = -2);
 	}
 
-	WriteUShortMSBfirst((USHORT)HeaderSize, fpOutput);				// header size
-	WriteUShortMSBfirst((USHORT)TrailerSize, fpOutput);				// trailer size
+	WriteULongMSBfirst((ULONG)HeaderSize, fpOutput);				// header size
+	WriteULongMSBfirst((ULONG)TrailerSize, fpOutput);				// trailer size
 
 	// copy audio file header (if present)
 	fread(buff, 1, HeaderSize, fpInput);
@@ -798,8 +804,8 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	if (AUXenabled)
 	{
 		char AUXdata[32] = "This is some auxiliary data!";
-		USHORT AUXsize = sizeof(AUXdata);
-		WriteUShortMSBfirst(AUXsize, fpOutput);
+		ULONG AUXsize = sizeof(AUXdata);
+		WriteULongMSBfirst(AUXsize, fpOutput);
 		if (fwrite(AUXdata, 1, AUXsize, fpOutput) != AUXsize) return(frames = -2);
 	}
 
@@ -810,7 +816,7 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Write trailing non-audio data
-short CLpacEncoder::WriteTrailer()
+long CLpacEncoder::WriteTrailer()
 {
 	long r;
 
@@ -833,18 +839,18 @@ short CLpacEncoder::WriteTrailer()
 
 	fseek(fpOutput, 0, SEEK_END);
 
-	return(TrailerSize);
+	return(0);
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Generate and write header, encoded audio, and trailing non-audio data
-short CLpacEncoder::EncodeAll()
+long CLpacEncoder::EncodeAll()
 {
 	long f;
 	ENCINFO encinfo;
 
 	if ((frames = WriteHeader(&encinfo)) < 0)
-		return((short)frames);
+		return(frames);
 
 	for (f = 0; f < frames; f++)
 	{
@@ -878,7 +884,7 @@ short CLpacEncoder::SetJoint(short Joint_x)
 
 short CLpacEncoder::SetOrder(short P_x)
 {
-	if ((P_x < 1) || (P_x > 1023))
+	if ((P_x < 0) || (P_x > 1023))
 		return(P = 10);
 	else
 		return(P = P_x);
@@ -982,20 +988,14 @@ short CLpacEncoder::SetMSBfirst(short MSBfirst_x)
 		return(MSBfirst = 1);
 };
 
-unsigned short CLpacEncoder::SetHeaderSize(unsigned short HeaderSize_x)
+unsigned long CLpacEncoder::SetHeaderSize(unsigned long HeaderSize_x)
 {
-	if (HeaderSize_x <= 32767)
-		return(HeaderSize = HeaderSize_x);
-	else
-		return(HeaderSize);
+	return(HeaderSize = HeaderSize_x);
 };
 
-unsigned short CLpacEncoder::SetTrailerSize(unsigned short TrailerSize_x)
+unsigned long CLpacEncoder::SetTrailerSize(unsigned long TrailerSize_x)
 {
-	if (TrailerSize_x <= 32767)
-		return(TrailerSize = TrailerSize_x);
-	else
-		return(TrailerSize);
+	return(TrailerSize = TrailerSize_x);
 };
 
 long CLpacEncoder::SetChanSort(long ChanSort_x, unsigned short *ChPos_x)
@@ -2308,14 +2308,14 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, lo
 		// Quantization of the coefficients
 
 		/* first coefficient: */
-		int a = (int) floor((-1 + sqrt(2) * sqrt(par[0]+1)) * 64);
+		int a = (int) floor((-1 + sqrt(2.0) * sqrt(par[0]+1.0)) * 64);
 		if (a > 63) a = 63; else if (a < -64) a = -64;
 		asi[0] = a;
 		parq[0] = pc12_tbl[a + 64];
 
 		/* second coefficient: */
 		if ( optP > 1) {
-			a = (int) floor((-1 + sqrt(2) * sqrt(-par[1]+1)) * 64);
+			a = (int) floor((-1 + sqrt(2.0) * sqrt(-par[1]+1.0)) * 64);
 			if (a > 63) a = 63; else if (a < -64) a = -64;
 			asi[1] = a;
 			parq[1] = -pc12_tbl[a + 64];
@@ -2339,14 +2339,14 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, lo
 				if( optP > 0)
 				{
 					par[0] = -0.9;
-					asi[0] = (long)floor((-1+sqrt(2)*sqrt(par[0]+1))*64);
+					asi[0] = (long)floor((-1+sqrt(2.0)*sqrt(par[0]+1.0))*64);
 					parq[0] = pc12_tbl[asi[0]+64];
 				}
 				if ( optP > 1)
 				// set all coefficients 0 
 				/* second coefficient: */
 				{
-					a = (int) floor((-1 + sqrt(2) ) * 64); 
+					a = (int) floor((-1 + sqrt(2.0) ) * 64); 
 					asi[1] = a; 
 					parq[1] = -pc12_tbl[a + 64]; 
 				}
@@ -2374,13 +2374,13 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, lo
 				if(optP>0)
 				{
 					par[0] = -0.9;
-					asi[0] = (long)floor((-1+sqrt(2)*sqrt(par[0]+1))*64);
+					asi[0] = (long)floor((-1+sqrt(2.0)*sqrt(par[0]+1.0))*64);
 					parq[0] = pc12_tbl[asi[0]+64];
 				}
 				/* second coefficient: */ 
 				if ( optP > 1)
 				{
-					a = (int) floor((-1 + sqrt(2) ) * 64);
+					a = (int) floor((-1 + sqrt(2.0) ) * 64);
 					asi[1] = a;
 					parq[1] = -pc12_tbl[a + 64];
 				}

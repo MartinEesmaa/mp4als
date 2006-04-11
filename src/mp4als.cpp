@@ -120,6 +120,13 @@ contents : Main file for MPEG-4 Audio Lossless Coding framework
  * 08/22/2005, Tilman Liebchen <liebchen@nue.tu-berlin.de>
  *   - changed version to RM16
  *
+ * 03/29/2006, Tilman Liebchen <liebchen@nue.tu-berlin.de>
+ *             Noboru Harada <n-harada@theory.brl.ntt.co.jp>
+ *   - changed version to RM17
+ *   - made code consistant with ALS corrigendum
+ *   - allow prediction order zero (-o0)
+ *   - some minor bug fixes
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -139,7 +146,7 @@ contents : Main file for MPEG-4 Audio Lossless Coding framework
 	#define SYSTEM_STR "Linux"
 #endif
 
-#define CODEC_STR "mp4alsRM16"
+#define CODEC_STR "mp4alsRM17"
 
 void ShowUsage(void);
 void ShowHelp(void);
@@ -309,8 +316,8 @@ int main(short argc, char **argv)
 		long samp = ainfo.Samples;
 		short type = ainfo.FileType;
 		short msb = ainfo.MSBfirst;
-		short head = ainfo.HeaderSize;
-		short trail = ainfo.TrailerSize;
+		unsigned long head = ainfo.HeaderSize;
+		unsigned long trail = ainfo.TrailerSize;
 
 		if (info)
 		{
@@ -349,8 +356,9 @@ int main(short argc, char **argv)
 			encoder.SetJoint(0);									// Joint Coding of all CPEs
 		encoder.SetLSBcheck(CheckOption(argc, argv, "-l"));
 		long N = encoder.SetFrameLength(GetOptionValue(argc, argv, "-n"));
-		short ord = GetOptionValue(argc, argv, "-o");
+		short ord = GetOptionValue(argc, argv, "-o", -1);
 		encoder.SetOrder(ord);
+		if(ord == 0) encoder.SetAdapt(0);							// force fixed order
 		short ra = encoder.SetRA(GetOptionValue(argc, argv, "-r"));
 		encoder.SetRAmode(GetOptionValue(argc, argv, "-u"));
 		encoder.SetBGMC(CheckOption(argc, argv, "-b"));				// BGMC mode
@@ -381,21 +389,21 @@ int main(short argc, char **argv)
 			// Order and frame length
 			if (freq <= 48000)
 			{
-				if (ord == 0)
+				if (ord < 0)
 					encoder.SetOrder(1023);
 				if (N == 0)
 					N = encoder.SetFrameLength(20480);
 			}
 			else if (freq <= 96000)
 			{
-				if ((ord == 0) || (ord > 511))
+				if ((ord < 0) || (ord > 511))
 					encoder.SetOrder(511);		//
 				if (N == 0)
 					N = encoder.SetFrameLength(20480);
 			}
 			else
 			{
-				if ((ord == 0) || (ord > 127))
+				if ((ord < 0) || (ord > 127))
 					encoder.SetOrder(127);
 				if (N == 0)
 					N = encoder.SetFrameLength(30720);
@@ -657,8 +665,8 @@ int main(short argc, char **argv)
 			long samp = ainfo.Samples;
 			short type = ainfo.FileType;
 			short msb = ainfo.MSBfirst;
-			short head = ainfo.HeaderSize;
-			short trail = ainfo.TrailerSize;
+			unsigned long head = ainfo.HeaderSize;
+			unsigned long trail = ainfo.TrailerSize;
 
 			printf("\nAudio Properties");
 			printf("\n  Sample type   : %s", ( samptype == 0 ) ? "int" : "float");
@@ -837,8 +845,8 @@ void ShowUsage()
 void ShowHelp()
 {
 	printf("\n%s - MPEG-4 Audio Lossless Coding (ALS), Reference Model Codec", CODEC_STR);
-    printf("\n  Version 16 for %s", SYSTEM_STR);
-	printf("\n  (c) 2003-2005 Tilman Liebchen, Technical University of Berlin");
+    printf("\n  Version 17 for %s", SYSTEM_STR);
+	printf("\n  (c) 2003-2006 Tilman Liebchen, Technical University of Berlin");
 	printf("\n    E-mail: liebchen@nue.tu-berlin.de");
     printf("\n  Portions by Yuriy A. Reznik, RealNetworks, Inc.");
     printf("\n    E-mail: yreznik@real.com");

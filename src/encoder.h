@@ -105,6 +105,16 @@ contents : Header file for encoder.cpp
 #include "mcc.h"
 #include "lms.h"
 
+// Type definition of 64-bit integer
+#ifdef WIN32
+	typedef	__int64				INT64;
+	typedef	unsigned __int64	UINT64;
+#else
+	#include <stdint.h>
+	typedef	int64_t				INT64;
+	typedef	uint64_t			UINT64;
+#endif
+
 class CLpacEncoder
 {
 protected:
@@ -135,8 +145,8 @@ protected:
 	unsigned char SampleType;		// Sample type (0 = integer, 1 = float)
 	unsigned long Samples;			// Number of samples (per channel)
 	long Freq;						// Sampling frequency
-	long HeaderSize;				// Length of file header (in bytes)
-	long TrailerSize;				// Number of trailing non-audio bytes
+	unsigned long HeaderSize;		// Length of file header (in bytes)
+	unsigned long TrailerSize;		// Number of trailing non-audio bytes
 
 	long frames;					// Number of frames
 	long fid;						// Current frame
@@ -190,8 +200,8 @@ public:
 	short SpecifyAudioInfo(AUDIOINFO *ainfo);
 	short OpenOutputFile(const char *name);
 	long WriteHeader(ENCINFO *encinfo);
-	short WriteTrailer();
-	short EncodeAll();
+	long WriteTrailer();
+	long EncodeAll();
 
 	long SetFrameLength(long N);
 	short SetOrder(short P);
@@ -210,8 +220,8 @@ public:
 	short SetWordlength(short Res);
 	long SetFrequency(long Freq);
 	short SetMSBfirst(short MSBfirst);
-	unsigned short SetHeaderSize(unsigned short HeaderSize);
-	unsigned short SetTrailerSize(unsigned short TrailerSize);
+	unsigned long SetHeaderSize(unsigned long HeaderSize);
+	unsigned long SetTrailerSize(unsigned long TrailerSize);
 	long SetChanSort(long ChanSort, unsigned short *ChPos);
 	short SetPITCH(short PITCH);
 	short SetSub(short Sub_x);

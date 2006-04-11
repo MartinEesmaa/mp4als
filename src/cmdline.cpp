@@ -75,7 +75,7 @@ short CheckOption(short argc, char **argv, char *opt)
 // Get value of an arbitrary option
 // Returns value, e.g. 3 if option is "-a3"
 // Returns 0 if option is set but has no value (e.g. "-a")
-long GetOptionValue(short argc, char **argv, char *opt)
+long GetOptionValue(short argc, char **argv, char *opt, long default_value = 0)
 {
 	short i;
 
@@ -88,7 +88,7 @@ long GetOptionValue(short argc, char **argv, char *opt)
 			i++;
 	} 
 	while (i < argc);
-	return(0);
+	return(default_value);
 }
 
 // Get multiple values of an arbitrary option, e.g. -m1,4,3,2,5

@@ -107,6 +107,7 @@ public:
 	CIEEE32( unsigned char sign, int exp, unsigned long mantissa ) { Set( sign, exp, mantissa ); }
 	operator float ( void ) const { return m_floatnum; }
 	void	Set( float Value );
+	void	Set( unsigned long Value );
 	void	Set( unsigned char sign, int exp, unsigned long mantissa );
 	bool	Set( const unsigned char* cpInput, bool MSBFirst = false );
 	void	Store( unsigned char* cpOutput, bool MSBFirst = false ) const;

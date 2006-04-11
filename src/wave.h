@@ -123,8 +123,8 @@ typedef struct
 	unsigned char SampleType;		// Sample type (0=int, 1=float)
 	unsigned long Samples;			// Number of Samples per Channel
 	unsigned long Freq;				// Sample Rate in Hz
-	unsigned short HeaderSize;		// Header Size in Bytes
-	unsigned short TrailerSize;		// Trailer Size in Bytes
+	unsigned long HeaderSize;		// Header Size in Bytes
+	unsigned long TrailerSize;		// Trailer Size in Bytes
 } AUDIOINFO;
 
 typedef struct
@@ -144,10 +144,8 @@ typedef struct
 
 
 // Functions
-short GetWaveFormatPCM(FILE *wav,WAVEFORMATPCM *wf, ULONG *samples);
-short WriteWaveHeaderPCM(FILE *wav, WAVEFORMATPCM *wf, ULONG *samples);
-
-short GetAiffFormat(FILE *aif, AIFFCOMMON *ac, ULONG *Offset, ULONG *BlockSize, ULONG *samplerate);
+ULONG GetWaveFormatPCM(FILE *wav,WAVEFORMATPCM *wf, ULONG *samples);
+ULONG GetAiffFormat(FILE *aif, AIFFCOMMON *ac, ULONG *Offset, ULONG *BlockSize, ULONG *samplerate);
 
 void WriteUShortLSBfirst(unsigned short x, FILE *fp);
 void WriteUShortMSBfirst(unsigned short x, FILE *fp);

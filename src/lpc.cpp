@@ -275,6 +275,8 @@ short GetResidualRA(long *x, long N, short P, short Q, long *par, long *cof, lon
 	long korr;
 	INT64 y, temp, temp2;
 
+	if(N < P) P = (short)N;
+
 	korr = 1 << (Q - 1);	// Correction term
 
 	par--;
@@ -332,6 +334,8 @@ short GetSignalRA(long *x, long N, short P, short Q, long *par, long *cof, long 
 	long n, i, m;
 	long korr;
 	INT64 y, temp, temp2;
+
+	if(N < P) P = (short)N;
 
 	korr = 1 << (Q - 1);	// Correction term
 

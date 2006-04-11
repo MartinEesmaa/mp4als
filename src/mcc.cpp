@@ -110,10 +110,11 @@ void	AllocateMccEncBuffer( MCC_ENC_BUFFER* pBuffer, long Chan, long N, short Res
 	// Channel loop
 	for( i=0; i<Chan; i++ ) {
 		// Allocate long buffers
-		pBuffer->m_dmat[i] = new long [N]; 
+		pBuffer->m_dmat[i] = new long [N + 1];
+		pBuffer->m_dmat[i][N] = 0;
 		pBuffer->m_stdmat[i] = new long [N]; 
 		pBuffer->m_orgdmat[i] = new long [N];
-		pBuffer->m_asimat[i] = new long [N];
+		pBuffer->m_asimat[i] = new long [MAXODR];
 		pBuffer->m_puchan[i] = new long [OAA];
 		//Added for MCC Extension
 		pBuffer->m_tdtau[i] = new long [OAA];
@@ -125,7 +126,7 @@ void	AllocateMccEncBuffer( MCC_ENC_BUFFER* pBuffer, long Chan, long N, short Res
 		memset( pBuffer->m_dmat[i], 0, (N) * sizeof(long) ); 
 		memset( pBuffer->m_stdmat[i], 0, (N) * sizeof(long) ); 
 		memset( pBuffer->m_orgdmat[i], 0, N * sizeof(long) );
-		memset( pBuffer->m_asimat[i], 0, N * sizeof(long) );
+		memset( pBuffer->m_asimat[i], 0, MAXODR * sizeof(long) );
 		//Added for MCC Extension
 		memset( pBuffer->m_tdtau[i], 0, OAA * sizeof(long) );
 		memset( pBuffer->m_MccMode[i], 0, OAA * sizeof(short) );
@@ -608,11 +609,11 @@ void	CLtp::PitchDetector( CLtpBuffer* pOutput, long *d, long N, short P, long Fr
 	buffdplp = buffdlp + end;
 
 	abss = 0.;
-	for( smpl=-Maxtau; smpl<N; smpl++ ) abss += fabs( d[smpl] );
+	for( smpl=-Maxtau; smpl<N; smpl++ ) abss += fabs( (double )d[smpl] );
 	abss /= ( N + Maxtau );
 
 	for( smpl=-Maxtau-2; smpl<N; smpl++ ) {
-		buffdp[smpl] = d[smpl] / ( sqrt( fabs( d[smpl] ) ) / ( sqrt( abss ) * 5. ) + 1. );	// comp15
+		buffdp[smpl] = d[smpl] / ( sqrt( fabs( (double )d[smpl] ) ) / ( sqrt( abss ) * 5. ) + 1. );	// comp15
 		buffdplp[smpl] = buffdp[smpl];
 	}
 
@@ -777,7 +778,7 @@ void	Cholesky( double* a, double* b, const double* c, int n )
 	for( i=1; i<n; i++ ) {
 		acc = a[i*n+i] + eps;
 		for( k=0; k<i; k++ ) acc -= t[i*n+k] * t[i*n+k];
-		if(!acc){ zeroflag=1; break;}
+		if(acc <= 0.0){ zeroflag=1; break;}
 		t[i*n+i] = sqrt( acc );
 		invt[i] = 1. / t[i*n+i];
 		for( j=i+1; j<n; j++ ) {
@@ -785,6 +786,13 @@ void	Cholesky( double* a, double* b, const double* c, int n )
 			for( k=0; k<i; k++ ) acc -= t[j*n+k] * t[i*n+k];
 			t[j*n+i] = acc * invt[i];
 		}
+	}
+
+	if(zeroflag) {
+		for(i = 0; i < n; i++) b[i] = 0.0;
+		delete[] t;
+		delete[] invt;
+		return;
 	}
 
 	for( i=0; i<n; i++ ) {
@@ -798,8 +806,6 @@ void	Cholesky( double* a, double* b, const double* c, int n )
 		for( k=i+1; k<n; k++ ) acc -= t[k*n+i] * b[k];
 		b[i] = acc * invt[i];
 	}
-
-	if(zeroflag) for(i = 0; i < n; i++) b[i] = 0.0;
 
 	delete[] t;
 	delete[] invt;
