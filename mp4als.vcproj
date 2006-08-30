@@ -100,7 +100,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="odbc32.lib odbccp32.lib lib/lpc_adapt.obj"
-				OutputFile="bin/win/Release/mp4alsRM17.exe"
+				OutputFile="bin/win/Release/mp4alsRM17fix.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
 				ProgramDatabaseFile="./Release/mp4alsRM16.pdb"

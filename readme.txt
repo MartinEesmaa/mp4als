@@ -1,17 +1,17 @@
 -------------------------------------------------------
-MPEG-4 Audio Lossless Coding - RM17
+MPEG-4 Audio Lossless Coding - RM17 (fixed)
 -------------------------------------------------------
-ftp://ftlabsrv.nue.tu-berlin.de/mp4lossless/rm17
+ftp://ftlabsrv.nue.tu-berlin.de/mp4lossless/refsoft
 -------------------------------------------------------
 Noboru Harada (NTT)
 Tilman Liebchen (Technical University of Berlin)
 -------------------------------------------------------
-Last modified: April 11, 2006
+Last modified: August 30, 2006 (fixed encoder.cpp)
 -------------------------------------------------------
 
 Files and Directories
 ---------------------
-/bin/win      - codec binary for Windows (/Release/mp4alsRM17.exe)
+/bin/win      - codec binary for Windows (/Release/mp4alsRM17fix.exe)
 /lib          - object files required for adaptive prediction order:
                 lpc_adapt.obj (Windows), linux/lpc_adapt.o, mac/lpc_adapt.o
 /src          - reference model 17 source code
@@ -48,8 +48,8 @@ Further Resources
   in document N7364, "Text of 14496-3:2001/FDAM 4, Audio Lossless Coding (ALS), 
   new audio profiles and BSAC extensions", Poznan, Poland, July 2005
 - The Reference software also implements the corrigenda specified in document
-  N8166, "Text of ISO/IEC 14496-3:2005/AMD2:2006/DCOR2, ALS", Montreux, 
-  Switzerland, April 2006, available for MPEG members at http://mpeg.nist.gov
+  N8300, "ISO/IEC 14496-3:2005/AMD2/Cor.2, ALS", Klagenfurt, 
+  Austria, July 2006, available for MPEG members at http://mpeg.nist.gov
 - A "Verification Report on MPEG-4 ALS" is publicly available at 
   http://www.chiariglione.org/mpeg/working_documents/mpeg-04/audio/als_vt.zip
 - For latest information and updates on MPEG-4 ALS please visit 

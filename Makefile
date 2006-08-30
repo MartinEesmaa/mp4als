@@ -1,7 +1,7 @@
-#TARGET = ~/bin/mp4alsRM17
-TARGET_WIN = ./bin/win/mp4alsRM17
-TARGET_LINUX = ./bin/linux/mp4alsRM17
-TARGET_MAC = ./bin/mac/mp4alsRM17
+#TARGET = ~/bin/mp4alsRM17fix
+TARGET_WIN = ./bin/win/mp4alsRM17fix
+TARGET_LINUX = ./bin/linux/mp4alsRM17fix
+TARGET_MAC = ./bin/mac/mp4alsRM17fix
 OBJ = src/*.o
 OBJ_WIN = src/*.obj
 

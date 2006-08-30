@@ -156,6 +156,12 @@ contents : Implementation of the CLpacEncoder class
  * 10/17/2005, Noboru Harada <n-harada@theory.brl.ntt.co.jp>
  *   - Merged bug fixed codes for RLS-LMS prepared from I2R.
  *
+ * 07/10/2006, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - debugged ALSSpecificConfig generation. (CRC position)
+ *
+ * 07/14/2006, Noboru Harada <n-harada@theory.brl.ntt.co.jp>
+ *   - added safty measures for some memcopy oprerations.
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -756,7 +762,7 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	if (fwrite(&tmp, 1, 1, fpOutput) != 1) return(frames = -2);		// SSBSJMCS
 
 	tmp = (BYTE)((CRCenabled ? 0x80 : 0) | (RLSLMS ? 0x40 : 0) | (AUXenabled ? 0x01 : 0));
-	if (fwrite(&tmp, 1, 1, fpOutput) != 1) return(frames = -2);		// CRxxxxxx
+	if (fwrite(&tmp, 1, 1, fpOutput) != 1) return(frames = -2);		// CRxxxxxA
 
 	//if (ChanConfig)
 	//	WriteUShortMSBfirst(ChanConfigInfo, fpOutput);				// channel configuration data
@@ -784,13 +790,6 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	FilePos = ftell(fpOutput);
 	if (fwrite(buff, 1, TrailerSize, fpOutput) != TrailerSize) return(frames = -2);
 
-	if (RA && (RAflag == 2))		// save random access info in header
-	{
-		RAUsize = new unsigned long[RAUnits];
-		// write dummy bytes
-		if (fwrite(RAUsize, 1, RAUnits * 4, fpOutput) != (RAUnits * 4)) return(frames = -2);
-	}
-
 	if (CRCenabled)
 	{
 		// CRC initialization
@@ -798,6 +797,13 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 		CRC = CRC_MASK;
 		// write dummy bytes
 		if (fwrite(buff, 1, 4, fpOutput) != 4) return(frames = -2);
+	}
+
+	if (RA && (RAflag == 2))		// save random access info in header
+	{
+		RAUsize = new unsigned long[RAUnits];
+		// write dummy bytes
+		if (fwrite(RAUsize, 1, RAUnits * 4, fpOutput) != (RAUnits * 4)) return(frames = -2);
 	}
 
 	// aud data test
@@ -1444,6 +1450,7 @@ short CLpacEncoder::EncodeFrame()
 
 				for (b = 0; b < B; b++)		// blocks
 				{
+					tmp = 0;
 					if ((fid == frames) && (b == (B-1)) && ((B<<1) > B1))	// last block of last frame
 					{
 						// copy last block from lower level (a) to upper level (a-1)
@@ -1512,6 +1519,7 @@ short CLpacEncoder::EncodeFrame()
 
 						for (b = 0; b < B; b++)			// blocks
 						{
+							tmp = 0;
 							if ((fid == frames) && (b == (B-1)) && ((B<<1) > B1))	// last block of last frame
 							{
 								// copy last block from lower level (a) to upper level (a-1)
@@ -2047,6 +2055,7 @@ short CLpacEncoder::EncodeFrame()
 
 			for (b = 0; b < B; b++)		// blocks
 			{
+				tmp = 0;
 				if ((fid == frames) && (b == (B-1)) && ((B<<1) > B1))	// last block of last frame
 				{
 					// copy last block from lower level (a) to upper level (a-1)
