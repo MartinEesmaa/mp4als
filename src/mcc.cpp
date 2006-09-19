@@ -1153,7 +1153,11 @@ void	ReconstructResidualTD( MCC_DEC_BUFFER* pBuffer, long Chan, long N )
 			stopflag++;
 		}
 	}
-
+	if(!stopflag)
+	{
+		fprintf( stderr, "\nInvalid bit stream!\n" );
+		exit(1);
+	}
 	// Recover Loop
 	do {
 		for( cnl=0; cnl<Chan; cnl++ ) {

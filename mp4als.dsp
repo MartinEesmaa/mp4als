@@ -1,24 +1,24 @@
 # Microsoft Developer Studio Project File - Name="mp4als" - Package Owner=<4>
 # Microsoft Developer Studio Generated Build File, Format Version 6.00
-# ** NICHT BEARBEITEN **
+# ** •ÒW‚µ‚È‚¢‚Å‚­‚¾‚³‚¢ **
 
 # TARGTYPE "Win32 (x86) Console Application" 0x0103
 
 CFG=mp4als - Win32 Debug
-!MESSAGE Dies ist kein gültiges Makefile. Zum Erstellen dieses Projekts mit NMAKE
-!MESSAGE verwenden Sie den Befehl "Makefile exportieren" und führen Sie den Befehl
+!MESSAGE ‚±‚ê‚Í—LŒø‚ÈÒ²¸Ì§²Ù‚Å‚Í‚ ‚è‚Ü‚¹‚ñB ‚±‚ÌÌßÛ¼Þª¸Ä‚ðËÞÙÄÞ‚·‚é‚½‚ß‚É‚Í NMAKE ‚ðŽg—p‚µ‚Ä‚­‚¾‚³‚¢B
+!MESSAGE [Ò²¸Ì§²Ù‚Ì´¸½Îß°Ä] ºÏÝÄÞ‚ðŽg—p‚µ‚ÄŽÀs‚µ‚Ä‚­‚¾‚³‚¢
 !MESSAGE 
 !MESSAGE NMAKE /f "mp4als.mak".
 !MESSAGE 
-!MESSAGE Sie können beim Ausführen von NMAKE eine Konfiguration angeben
-!MESSAGE durch Definieren des Makros CFG in der Befehlszeile. Zum Beispiel:
+!MESSAGE NMAKE ‚ÌŽÀsŽž‚É\¬‚ðŽw’è‚Å‚«‚Ü‚·
+!MESSAGE ºÏÝÄÞ ×²Ýã‚ÅÏ¸Û‚ÌÝ’è‚ð’è‹`‚µ‚Ü‚·B—á:
 !MESSAGE 
 !MESSAGE NMAKE /f "mp4als.mak" CFG="mp4als - Win32 Debug"
 !MESSAGE 
-!MESSAGE Für die Konfiguration stehen zur Auswahl:
+!MESSAGE ‘I‘ð‰Â”\‚ÈËÞÙÄÞ Ó°ÄÞ:
 !MESSAGE 
-!MESSAGE "mp4als - Win32 Release" (basierend auf  "Win32 (x86) Console Application")
-!MESSAGE "mp4als - Win32 Debug" (basierend auf  "Win32 (x86) Console Application")
+!MESSAGE "mp4als - Win32 Release" ("Win32 (x86) Console Application" —p)
+!MESSAGE "mp4als - Win32 Debug" ("Win32 (x86) Console Application" —p)
 !MESSAGE 
 
 # Begin Project
@@ -42,7 +42,7 @@ RSC=rc.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /c
-# ADD CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
+# ADD CPP /nologo /W3 /GX /O2 /I "src/AlsImf" /I "src/AlsImf/Mp4" /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /D "WARN_BUFFERSIZEDB_OVER_24BIT" /D "PERMIT_SAMPLERATE_OVER_16BIT" /FR /YX /FD /c
 # ADD BASE RSC /l 0x407 /d "NDEBUG"
 # ADD RSC /l 0x407 /d "NDEBUG"
 BSC32=bscmake.exe
@@ -50,7 +50,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib lib/lpc_adapt.obj /nologo /subsystem:console /machine:I386 /out:"bin/win/Release/mp4alsRM17fix.exe"
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib lib/win/lpc_adapt.obj /nologo /subsystem:console /machine:I386 /out:"bin/win/Release/mp4alsRM18.exe"
 # SUBTRACT LINK32 /profile
 
 !ELSEIF  "$(CFG)" == "mp4als - Win32 Debug"
@@ -67,7 +67,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /GZ /c
-# ADD CPP /nologo /W3 /Gm /GX /ZI /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /GZ /c
+# ADD CPP /nologo /W3 /Gm /GX /ZI /I "src/AlsImf" /I "src/AlsImf/Mp4" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /D "WARN_BUFFERSIZEDB_OVER_24BIT" /D "PERMIT_SAMPLERATE_OVER_16BIT" /FR /YX /FD /GZ /c
 # ADD BASE RSC /l 0x407 /d "_DEBUG"
 # ADD RSC /l 0x407 /d "_DEBUG"
 BSC32=bscmake.exe
@@ -75,7 +75,8 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386 /pdbtype:sept
-# ADD LINK32 libcd.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib lib\lpc_adapt.obj /nologo /subsystem:console /debug /machine:I386 /nodefaultlib /out:"bin/win/Debug/mp4alsRM16.exe" /pdbtype:sept
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib lib/win/lpc_adapt.obj /nologo /subsystem:console /debug /machine:I386 /nodefaultlib:"libc.lib" /out:"bin/win/Debug/mp4alsRM18.exe" /pdbtype:sept
+# SUBTRACT LINK32 /nodefaultlib
 
 !ENDIF 
 
@@ -86,6 +87,10 @@ LINK32=link.exe
 # Begin Group "Source Files"
 
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
+# Begin Source File
+
+SOURCE=.\src\als2mp4.cpp
+# End Source File
 # Begin Source File
 
 SOURCE=.\src\audiorw.cpp
@@ -148,6 +153,10 @@ SOURCE=.\src\wave.cpp
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
+SOURCE=.\src\als2mp4.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\audiorw.h
 # End Source File
 # Begin Source File
@@ -205,6 +214,78 @@ SOURCE=.\src\rn_bitio.h
 # Begin Source File
 
 SOURCE=.\src\wave.h
+# End Source File
+# End Group
+# Begin Group "AlsImf"
+
+# PROP Default_Filter ""
+# Begin Group "Mp4"
+
+# PROP Default_Filter ""
+# Begin Source File
+
+SOURCE=.\src\AlsImf\Mp4\Mp4aFile.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\Mp4\Mp4aFile.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\Mp4\Mp4Box.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\Mp4\Mp4Box.h
+# End Source File
+# End Group
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfBox.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfBox.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfBoxAmd1.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfBoxAmd1.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfDescriptor.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfDescriptor.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfFileStream.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfFileStream.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfSampleEntry.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfSampleEntry.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfStream.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfType.h
 # End Source File
 # End Group
 # End Target

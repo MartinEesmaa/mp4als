@@ -48,6 +48,10 @@ contents : Command line parsing
  * 06/08/2005, Tilman Liebchen <liebchen@nue.tu-berlin.de>
  *   - changed GetOptionValue() to long, removed GetOptionValueL(), 
  *
+ * 05/31/2006, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - modified GetOptionValue() and GetOptionValues to support longer
+ *     option names.
+ *
  *************************************************************************/
 
 #include <string.h>
@@ -78,12 +82,13 @@ short CheckOption(short argc, char **argv, char *opt)
 long GetOptionValue(short argc, char **argv, char *opt, long default_value = 0)
 {
 	short i;
+	size_t	OptLen = strlen( opt );
 
 	i = 1;
 	do
 	{
-		if (!strncmp(argv[i], opt, 2))
-			return(atol(argv[i] + 2));
+		if (!strncmp(argv[i], opt, OptLen))
+			return(atol(argv[i] + OptLen));
 		else
 			i++;
 	} 
@@ -99,16 +104,17 @@ long GetOptionValues(short argc, char **argv, char *opt, long N, unsigned short 
 {
 	short i, n;
 	char *str, *pos;
+	size_t	OptLen = strlen( opt );
 
 	i = 1;
 	while (i < argc)
 	{
-		if (!strncmp(argv[i], opt, 2))
+		if (!strncmp(argv[i], opt, OptLen))
 		{
 			if (N < 1)		// Check if option is set
 				return(-1);	// Option is set, values are ignored
 
-			str = argv[i] + 2;
+			str = argv[i] + OptLen;
 			
 			val[0] = atoi(str);		// First value
 			n = 1;

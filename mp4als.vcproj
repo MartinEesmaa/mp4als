@@ -21,7 +21,8 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="4"
-				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
+				AdditionalIncludeDirectories="src/AlsImf;src/AlsImf/Mp4"
+				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;WARN_BUFFERSIZEDB_OVER_24BIT;PERMIT_SAMPLERATE_OVER_16BIT"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="5"
 				UsePrecompiledHeader="2"
@@ -37,13 +38,14 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="libcd.lib odbc32.lib odbccp32.lib lib\lpc_adapt.obj"
-				OutputFile="bin/win/Debug/mp4alsRM16.exe"
+				AdditionalDependencies="libcd.lib odbc32.lib odbccp32.lib lib/win/lpc_adapt.obj"
+				OutputFile="bin/win/Debug/mp4alsRM18.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
 				IgnoreAllDefaultLibraries="FALSE"
+				IgnoreDefaultLibraryNames="libc.lib"
 				GenerateDebugInformation="TRUE"
-				ProgramDatabaseFile="./Debug/mp4alsRM16.pdb"
+				ProgramDatabaseFile="./Debug/mp4alsRM18.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
@@ -83,7 +85,8 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
+				AdditionalIncludeDirectories="src/AlsImf;src/AlsImf/Mp4"
+				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;WARN_BUFFERSIZEDB_OVER_24BIT;PERMIT_SAMPLERATE_OVER_16BIT"
 				StringPooling="TRUE"
 				RuntimeLibrary="4"
 				EnableFunctionLevelLinking="TRUE"
@@ -99,11 +102,11 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib lib/lpc_adapt.obj"
-				OutputFile="bin/win/Release/mp4alsRM17fix.exe"
+				AdditionalDependencies="odbc32.lib odbccp32.lib lib/win/lpc_adapt.obj"
+				OutputFile="bin/win/Release/mp4alsRM18.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
-				ProgramDatabaseFile="./Release/mp4alsRM16.pdb"
+				ProgramDatabaseFile="./Release/mp4alsRM18.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
@@ -138,6 +141,9 @@
 		<Filter
 			Name="Source Files"
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat">
+			<File
+				RelativePath=".\src\als2mp4.cpp">
+			</File>
 			<File
 				RelativePath="src\audiorw.cpp">
 				<FileConfiguration
@@ -409,6 +415,9 @@
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl">
 			<File
+				RelativePath=".\src\als2mp4.h">
+			</File>
+			<File
 				RelativePath="src\audiorw.h">
 			</File>
 			<File
@@ -453,6 +462,62 @@
 			<File
 				RelativePath="src\wave.h">
 			</File>
+		</Filter>
+		<Filter
+			Name="AlsImf"
+			Filter="">
+			<File
+				RelativePath=".\src\AlsImf\ImfBox.cpp">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfBox.h">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfBoxAmd1.cpp">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfBoxAmd1.h">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfDescriptor.cpp">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfDescriptor.h">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfFileStream.cpp">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfFileStream.h">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfSampleEntry.cpp">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfSampleEntry.h">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfStream.h">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfType.h">
+			</File>
+			<Filter
+				Name="Mp4"
+				Filter="">
+				<File
+					RelativePath=".\src\AlsImf\Mp4\Mp4aFile.cpp">
+				</File>
+				<File
+					RelativePath=".\src\AlsImf\Mp4\Mp4aFile.h">
+				</File>
+				<File
+					RelativePath=".\src\AlsImf\Mp4\Mp4Box.cpp">
+				</File>
+				<File
+					RelativePath=".\src\AlsImf\Mp4\Mp4Box.h">
+				</File>
+			</Filter>
 		</Filter>
 	</Files>
 	<Globals>
