@@ -132,6 +132,48 @@ contents : Main file for MPEG-4 Audio Lossless Coding framework
  *   - added MP4 file format support
  *   - changed version to RM18
  *
+ * 05/10/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - changed version to RM18b
+ *   - fixed a bug in AudioSpecificConfig
+ *
+ * 05/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - changed version to RM19
+ *   - supported 64-bit data size
+ *   - supported Sony Wave64 and BWF with RF64 formats
+ *
+ * 05/25/2007, Nobory Harada <n-harada@theory.brl.ntt.co.jp>
+ *   - debugged.
+ *   - modified -7 option.
+ *
+ * 06/08/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added error messages for encoding failure.
+ *   - removed SetMp4Info().
+ *
+ * 07/02/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added error message for encoding failure (memory error).
+ *
+ * 07/15/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added -OAFI command line option.
+ *   - supported ALSSpecificConfig with header and trailer embedded.
+ *
+ * 07/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - updated AlsImf library.
+ *
+ * 08/10/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - debugged autoname in decoder.
+ *
+ * 10/20/2008, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - changed version to RM22.
+ *   - updated AlsImf library.
+ *
+ * 10/22/2008, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - modified process exit code.
+ *
+ * 11/28/2008, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - fixed the signature of main().
+ *   - fixed some printf format strings
+ *   - changed version to RM22rev1.
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -148,6 +190,8 @@ contents : Main file for MPEG-4 Audio Lossless Coding framework
 
 #if defined( WIN32 )
 	#define SYSTEM_STR "Win32"
+#elif defined( WIN64 )
+	#define SYSTEM_STR "Win64"
 #elif defined( __linux__ )
 	#define SYSTEM_STR "Linux"
 #elif defined( __APPLE__ )
@@ -156,14 +200,19 @@ contents : Main file for MPEG-4 Audio Lossless Coding framework
 	#define SYSTEM_STR "(unknown)"
 #endif
 
-#define CODEC_STR "mp4alsRM18"
+#if defined( _MSC_VER )
+#define	PRINTF_LL	"%I64d"
+#else
+#define	PRINTF_LL	"%lld"
+#endif
+
+#define CODEC_STR "mp4alsRM22rev1"
 #define	ALS_TMP_FILENAME	CODEC_STR ".$$$"
 
-void SetMp4Opt( short argc, char** argv, MP4OPT& Opt );
 void ShowUsage(void);
 void ShowHelp(void);
 
-int main(short argc, char **argv)
+int main(int argc, char **argv)
 {
 	clock_t start, finish;
 	short verbose, decode, info, autoname = 0, output, len, crc = 0, result = 0, input, wrongext;
@@ -172,13 +221,25 @@ int main(short argc, char **argv)
 	AUDIOINFO ainfo;
 	ENCINFO encinfo;
 	bool	mp4file;
-	MP4OPT	mp4opt;
+	bool	oafi_flag;
+	MP4INFO	mp4info;
+
+	// Initialize MP4INFO structure.
+	mp4info.m_StripRaInfo = false;
+	mp4info.m_RaLocation = 0;
+	mp4info.m_pInFile = mp4info.m_pOutFile = mp4info.m_pOriginalFile = NULL;
+	mp4info.m_Samples = 0;
+	mp4info.m_HeaderSize = mp4info.m_TrailerSize = mp4info.m_AuxDataSize = 0;
+	mp4info.m_HeaderOffset = mp4info.m_TrailerOffset = mp4info.m_AuxDataOffset = 0;
+	mp4info.m_FileType = 0;
+	mp4info.m_RMflag = false;
+	mp4info.m_UseMeta = false;
 
 	// Check parameters ///////////////////////////////////////////////////////////////////////////
 	if (argc == 1)								// "codec" without parameters
 	{
 		ShowUsage();
-		return(1);
+		return(3);
 	}
 
 	if (CheckOption(argc, argv, "-h"))			// "codec ... -h ..."
@@ -194,7 +255,7 @@ int main(short argc, char **argv)
 		if (output)								// "codec -", not allowed
 		{
 			ShowUsage();
-			return(1);
+			return(3);
 		}
 		else									// "codec <infile>"
 			autoname = 1;
@@ -204,13 +265,13 @@ int main(short argc, char **argv)
 	if (input && output)						// "codec ... - -", not allowed
 	{
 		ShowUsage();
-		return(1);
+		return(3);
 	}
 
 	if ((!output) && (argv[argc-1][0] == '-'))	// "codec ... -<...>", not allowed
 	{
 		ShowUsage();
-		return(1);
+		return(3);
 	}
 
 	if ((!input) && (argv[argc-2][0] == '-'))	// "codec -<...> <file/->
@@ -218,7 +279,7 @@ int main(short argc, char **argv)
 		if (output)								// "codec -<...> -", not allowed
 		{
 			ShowUsage();
-			return(1);
+			return(3);
 		}
 		else									// "codec -<...> <file>"
 			autoname = 1;
@@ -228,6 +289,7 @@ int main(short argc, char **argv)
 	decode = CheckOption(argc, argv, "-x");
 	info = CheckOption(argc, argv, "-I");
 	mp4file = ( CheckOption( argc, argv, "-MP4" ) != 0 );
+	oafi_flag = ( CheckOption( argc, argv, "-OAFI" ) != 0 );
 
 	if (info)
 	{
@@ -268,7 +330,9 @@ int main(short argc, char **argv)
 							strcmp(tmp2, ".aif") && strcmp(tmp2, ".AIF") &&
 							strcmp(tmp2, ".aiff") && strcmp(tmp2, ".AIFF") &&
 							strcmp(tmp2, ".raw") && strcmp(tmp2, ".RAW") &&
-							strcmp(tmp2, ".pcm") && strcmp(tmp2, ".PCM");
+							strcmp(tmp2, ".pcm") && strcmp(tmp2, ".PCM") &&
+							strcmp(tmp2, ".bwf") && strcmp(tmp2, ".BWF") &&
+							strcmp(tmp2, ".w64") && strcmp(tmp2, ".W64");
 
 			if (wrongext)
 			{
@@ -304,7 +368,7 @@ int main(short argc, char **argv)
 		if (result = encoder.OpenInputFile(infile))
 		{
 			fprintf(stderr, "\nUnable to open file %s for reading!\n", infile);
-			exit(1);
+			exit(3);
 		}
 
 		// Raw input file
@@ -331,11 +395,11 @@ int main(short argc, char **argv)
 		unsigned char samptype = ainfo.SampleType;
 		long freq = ainfo.Freq;
 		long chan = ainfo.Chan;
-		long samp = ainfo.Samples;
+		ALS_INT64 samp = ainfo.Samples;
 		short type = ainfo.FileType;
 		short msb = ainfo.MSBfirst;
-		unsigned long head = ainfo.HeaderSize;
-		unsigned long trail = ainfo.TrailerSize;
+		ALS_INT64 head = ainfo.HeaderSize;
+		ALS_INT64 trail = ainfo.TrailerSize;
 
 		if (info)
 		{
@@ -346,22 +410,25 @@ int main(short argc, char **argv)
 			printf("\n  Sample type   : %s", ( samptype == 0 ) ? "int" : "float");
 			printf("\n  Resolution    : %d bit", res);
 			if ( samptype == 1 ) printf( " (int %d bit)", intres );
-			printf("\n  Sample Rate   : %d Hz", freq);
-			printf("\n  Channels      : %d ch", chan);
-			printf("\n  Samples/Chan. : %d", samp);
+			printf("\n  Sample Rate   : %ld Hz", freq);
+			printf("\n  Channels      : %ld ch", chan);
+			printf("\n  Samples/Chan. : " PRINTF_LL, samp);
 			printf("\n  Duration      : %.1f sec\n", playtime = (double)samp / freq);
 
 			char typestr[16];
 			if (type == 0) strcpy(typestr, "RAW");
 			else if (type == 1) strcpy(typestr, "WAVE");
 			else if (type == 2) strcpy(typestr, "AIFF");
+			else if (type == 3) strcpy(typestr, "BWF");
+			else if (type == 4) strcpy(typestr, "Sony Wave64");
+			else if (type == 5) strcpy(typestr, "BWF with RF64");
 			else strcpy(typestr, "UNKNOWN");
 
 			printf("\nFormat Properties");
 			printf("\n  File Type    : %s", typestr);
 			printf("\n  Byte Order   : %s", msb ? "MSB first" : "LSB first");
-			printf("\n  Header Size  : %d bytes", head);
-			printf("\n  Trailer Size : %d bytes\n", trail);
+			printf("\n  Header Size  : " PRINTF_LL " bytes", head);
+			printf("\n  Trailer Size : " PRINTF_LL " bytes\n", trail);
 
 			exit(0);
 		}
@@ -382,7 +449,8 @@ int main(short argc, char **argv)
 		encoder.SetBGMC(CheckOption(argc, argv, "-b"));				// BGMC mode
 		encoder.SetMCC(GetOptionValue(argc, argv, "-t"));			// Two methods mode (Joint Stereo and Multi-channel correlation)
 		encoder.SetPITCH(CheckOption(argc, argv, "-p"));			// PITCH mode (LTP)
-		encoder.SetSub(GetOptionValue(argc, argv, "-g"));			// block switching level
+		short bs = GetOptionValue(argc, argv, "-g");				// block switching level
+		encoder.SetSub(bs);
 		encoder.SetCRC(!CheckOption(argc, argv, "-e"));				// disable CRC
 		
 		long mccnojs = GetOptionValue(argc, argv, "-s");
@@ -401,7 +469,7 @@ int main(short argc, char **argv)
 			// Common options
 			encoder.SetAdapt(1);
 			encoder.SetBGMC(1);
-			encoder.SetSub(5);
+			if ((bs<=0) || (bs>5)) encoder.SetSub(5);
 			encoder.SetLSBcheck(1);
 
 			// Order and frame length
@@ -441,7 +509,7 @@ int main(short argc, char **argv)
 		float	AcfGain = 0.f;
 		if ( !GetFOption( argc, argv, AcfMode, AcfGain, MlzMode ) ) {
 			fprintf( stderr, "\nInvalid -f option.\n" );
-			exit( 1 );
+			exit( 3 );
 		}
 		encoder.SetAcf( AcfMode, AcfGain );
 		encoder.SetMlz( MlzMode );
@@ -454,22 +522,36 @@ int main(short argc, char **argv)
 			delete [] pos;
 		}
 
+		// Use oafi when either samples, header size, trailer size exceeds 4GB.
+		if ( mp4file && ( ( type & ~0x3 ) || ( ainfo.Samples >= 0xffffffff ) || ( ainfo.HeaderSize >= 0xffffffff ) || ( ainfo.TrailerSize >= 0xffffffff ) ) ) oafi_flag = true;
+
 		// Parse -MP4x options
 		if ( mp4file ) {
 			// Check options.
-			if ( strcmp( outfile, " " ) == 0 ) { fprintf( stderr, "\nstdout is not available for MP4 file format.\n" ); exit( 1 ); }
-			if ( CheckOption( argc, argv, "-c" ) ) { fprintf( stderr, "\n-c option is not available for MP4 file format.\n" ); exit( 1 ); }
-			if ( GetOptionValue( argc, argv, "-u" ) == 2 ) { fprintf( stderr, "\n-u2 option is not available for MP4 file format.\n" ); exit( 1 ); }
+			if ( strcmp( outfile, " " ) == 0 ) { fprintf( stderr, "\nstdout is not available for MP4 file format.\n" ); exit( 3 ); }
+			if ( CheckOption( argc, argv, "-c" ) ) { fprintf( stderr, "\n-c option is not available for MP4 file format.\n" ); exit( 3 ); }
+			if ( GetOptionValue( argc, argv, "-u" ) == 2 ) { fprintf( stderr, "\n-u2 option is not available for MP4 file format.\n" ); exit( 3 ); }
 
-			// Build up MP4OPT structure.
-			mp4opt.m_pInFile = ALS_TMP_FILENAME;
-			mp4opt.m_pOutFile = outfile;
-			outfile = ALS_TMP_FILENAME;
-			SetMp4Opt( argc, argv, mp4opt );
+			// Build up MP4INFO structure.
+			mp4info.m_pInFile = ALS_TMP_FILENAME;
+			mp4info.m_pOutFile = outfile;
+			mp4info.m_pOriginalFile = infile;
+			mp4info.m_Samples = ainfo.Samples;
+			mp4info.m_HeaderSize = oafi_flag ? ainfo.HeaderSize : 0;
+			mp4info.m_TrailerSize = oafi_flag ? ainfo.TrailerSize : 0;
+			mp4info.m_AuxDataSize = 0;	// Not used.
+			mp4info.m_HeaderOffset = mp4info.m_TrailerOffset = mp4info.m_AuxDataOffset = 0;	// Not used in encoding.
+			mp4info.m_FileType = static_cast<NAlsImf::IMF_UINT8>( type );
+			mp4info.m_FileTypeName.erase();
+			mp4info.m_RMflag = true;
+			mp4info.m_StripRaInfo = true;	// true:Strip RA info / false:Do not strip RA info
+			mp4info.m_RaLocation = 0;		// RAU size location: 0=frames, 1=header, 2=none
+			mp4info.m_UseMeta = oafi_flag;
+			outfile = (char*)ALS_TMP_FILENAME;
 		}
 
 		// Open Output File
-		if (result = encoder.OpenOutputFile(outfile))
+		if (result = encoder.OpenOutputFile(outfile, mp4file, oafi_flag ))
 		{
 			fprintf(stderr, "\nUnable to open file %s for writing!\n", outfile);
 			exit(1);
@@ -479,7 +561,7 @@ int main(short argc, char **argv)
 		if (verbose)
 		{
 			printf("\nPCM file: %s", strcmp(infile, " ") ? infile : "-");
-			if ( mp4file ) printf( "\nMP4 file: %s", mp4opt.m_pOutFile );
+			if ( mp4file ) printf( "\nMP4 file: %s", mp4info.m_pOutFile );
 			else printf("\nALS file: %s", outfile);
 			printf("\n\nEncoding...   0%%");
 			fflush(stdout);
@@ -492,7 +574,8 @@ int main(short argc, char **argv)
 		}
 		else
 		{
-			long frames, f, fpro, fpro_alt = 0, step = 1;
+			long fpro, fpro_alt = 0, step = 1;
+			ALS_INT64 frames, f;
 
 			// Generate and write header
 			if ((frames = encoder.WriteHeader(&encinfo)) < 0)
@@ -516,10 +599,10 @@ int main(short argc, char **argv)
 				}
 				if (verbose)
 				{
-					fpro = (f + 1) * 100 / frames;
+					fpro = static_cast<long>( (f + 1) * 100 / frames );
 					if ((fpro >= fpro_alt + step) || (fpro == 100))
 					{
-						printf("\b\b\b\b%3d%%", fpro_alt = fpro);
+						printf("\b\b\b\b%3ld%%", fpro_alt = fpro);
 						fflush(stdout);
 					}
 				}
@@ -535,31 +618,47 @@ int main(short argc, char **argv)
 
 		// Converting ALS to MP4 //////////////////////////////////////////////////////////////////
 		if ( mp4file ) {
-			A2MERR	A2mErr = AlsToMp4( mp4opt );
+			A2MERR	A2mErr = AlsToMp4( mp4info );
 			if ( A2mErr != A2MERR_NONE ) {
 				fprintf( stderr, "\nERROR: Unable to convert ALS to MP4: %s\n", ToErrorString( A2mErr ) );
 				encoder.CloseFiles();
 				remove( ALS_TMP_FILENAME );
 				exit( 1 );
 			}
-			outfile = const_cast<char*>( mp4opt.m_pOutFile );
+			outfile = const_cast<char*>( mp4info.m_pOutFile );
 		}
 
 		// End of encoding ////////////////////////////////////////////////////////////////////////
 
-		if (result == -1)
-		{
-			fprintf(stderr, "\nERROR: %s is not a supported sound file!\n", infile);
+		if ( result < 0 ) {
 			encoder.CloseFiles();
 			if ( mp4file ) remove( ALS_TMP_FILENAME );
-			exit(2);
-		}
-		else if (result == -2)
-		{
-			fprintf(stderr, "\nERROR: Unable to write to %s - disk full?\n", outfile);
-			encoder.CloseFiles();
-			if ( mp4file ) remove( ALS_TMP_FILENAME );
-			exit(1);
+			switch( result ) {
+			case -1:
+				fprintf(stderr, "\nERROR: %s is not a supported sound file!\n", infile);
+				exit(2);
+			case -2:
+				fprintf(stderr, "\nERROR: Unable to write to %s - disk full?\n", outfile);
+				exit(1);
+			case -3:
+				fprintf(stderr, "\nERROR: Number of RAUs exceeds the limit of 0x7fffffff.\n");
+				exit(3);
+			case -4:
+				fprintf(stderr, "\nERROR: Number of samples exceeds the limit of 0xffffffff in ALS format.\n");
+				exit(3);
+			case -5:
+				fprintf(stderr, "\nERROR: File header is too big for ALS format!\n");
+				exit(3);
+			case -6:
+				fprintf(stderr, "\nERROR: File trailer is too big for ALS format!\n");
+				exit(3);
+			case -7:
+				fprintf(stderr, "\nERROR: Memory error!\n");
+				exit(3);
+			default:
+				fprintf(stderr, "\nERROR: Unexpected error.\n");
+				exit(3);
+			}
 		}
 
 		// Screen output (2)
@@ -570,16 +669,16 @@ int main(short argc, char **argv)
 			unsigned char samptype = ainfo.SampleType;
 			long freq = ainfo.Freq;
 			long chan = ainfo.Chan;
-			long samp = ainfo.Samples;
-			long pcmsize, alssize, mp4size;
+			ALS_INT64 samp = ainfo.Samples;
+			ALS_INT64 pcmsize, alssize, mp4size;
 			encoder.GetFilePositions(&pcmsize, &alssize);
 			mp4size = 0;
 			if ( mp4file ) {
-				FILE*	fpmp4 = fopen( mp4opt.m_pOutFile, "rb" );
-				if ( fpmp4 != NULL ) {
-					fseek( fpmp4, 0, SEEK_END );
-					mp4size = ftell( fpmp4 );
-					fclose( fpmp4 );
+				HALSSTREAM hMp4Stream = NULL;
+				if ( OpenFileReader( mp4info.m_pOutFile, &hMp4Stream ) == 0 ) {
+					fseek( hMp4Stream, 0, SEEK_END );
+					mp4size = ftell( hMp4Stream );
+					fclose( hMp4Stream );
 				}
 			}
 			double ratio = (double)pcmsize / alssize;
@@ -588,12 +687,12 @@ int main(short argc, char **argv)
 			printf(" done\n");
 			printf("\nAudio format : %s / %d bit ", ( samptype == 0 ) ? "int" : "float", res );
 			if ( samptype == 1 ) printf( "(int %d bit) ", intres );
-			printf( "/ %ld Hz / %d ch", freq, chan);
+			printf( "/ %ld Hz / %ld ch", freq, chan);
 			printf("\nBit rate     : %.1f kbit/s", freq * chan * res / 1000.0);
 			printf("\nPlaying time : %.1f sec", playtime);
-			printf("\nPCM file size: %ld bytes", pcmsize);
-			if ( mp4file ) printf("\nMP4 file size: %ld bytes", mp4size);
-			else printf("\nALS file size: %ld bytes", alssize);
+			printf("\nPCM file size: " PRINTF_LL " bytes", pcmsize);
+			if ( mp4file ) printf("\nMP4 file size: " PRINTF_LL " bytes", mp4size);
+			else printf("\nALS file size: " PRINTF_LL " bytes", alssize);
 			printf("\nCompr. ratio : %.3f (%.2f %%)", ratio, 100 / ratio);
 			printf("\nAverage bps  : %.3f", res / ratio);
 			printf("\nAverage rate : %.1f kbit/s\n", freq * chan * res / (ratio * 1000));
@@ -606,7 +705,7 @@ int main(short argc, char **argv)
 			if (encoder.CloseFiles())
 			{
 				fprintf(stderr, "\nUnable to close files. Check not possible\n");
-				exit(1);
+				exit(3);
 			}
 
 			if (verbose)
@@ -617,13 +716,13 @@ int main(short argc, char **argv)
 
 			CLpacDecoder decoder;
 
-			if (result = decoder.OpenInputFile(outfile))
+			if (result = decoder.OpenInputFile(outfile, mp4file))
 			{
 				fprintf(stderr, "\nUnable to open file %s for reading!\n", outfile);
-				exit(1);
+				exit(3);
 			}
 
-			if (result = decoder.AnalyseInputFile(&ainfo, &encinfo))
+			if (result = decoder.AnalyseInputFile(&ainfo, &encinfo, mp4info))
 			{
 				fprintf(stderr, "\nERROR: %s is not a valid ALS file!\n", outfile);
 				decoder.CloseFiles();
@@ -632,7 +731,7 @@ int main(short argc, char **argv)
 
 			decoder.OpenOutputFile("");
 
-			crc = decoder.DecodeAll();
+			crc = decoder.DecodeAll( mp4info );
 
 			if (crc == -1)
 				fprintf(stderr, "\nERROR: %s is not a valid ALS file!\n", outfile);
@@ -681,6 +780,7 @@ int main(short argc, char **argv)
 				fprintf(stderr, "\nFile %s does't seem to be an ALS file (.als or .mp4)!\n", infile);
 				exit(2);
 			}
+			tmp2 = strrchr( tmp, '.' );
 			// Output file name depends on original file type, see below
 		}
 		else if (output)	// Output to stdout
@@ -688,34 +788,38 @@ int main(short argc, char **argv)
 			infile = argv[argc-2];
 			strcpy(tmp, " ");
 			outfile = tmp;
+			tmp2 = strrchr( infile, '.' );
 		}
 		else if (input)		// Input from stdin
 		{
 			strcpy(tmp, " ");
 			infile = tmp;
 			outfile = argv[argc-1];
+			tmp2 = strrchr( tmp, '.' );
 		}
 		else
 		{
 			infile = argv[argc-2];
 			outfile = argv[argc-1];
+			tmp2 = strrchr( infile, '.' );
 		}
 
 		// Turn on -MP4 option, when input file ends with ".mp4".
-		tmp2 = strrchr( infile, '.' );
 		if ( ( tmp2 != NULL ) && ( ( strcmp( tmp2, ".mp4" ) == 0 ) || ( strcmp( tmp2, ".MP4" ) == 0 ) ) ) mp4file = true;
 
 		if ( mp4file ) {
 			// Check options.
-			if ( strcmp( infile, " " ) == 0 ) { fprintf( stderr, "\nstdin is not available for MP4 file format.\n" ); exit( 1 ); }
+			if ( strcmp( infile, " " ) == 0 ) { fprintf( stderr, "\nstdin is not available for MP4 file format.\n" ); exit( 3 ); }
 
-			// Build up MP4OPT structure.
-			mp4opt.m_pInFile = infile;
-			mp4opt.m_pOutFile = ALS_TMP_FILENAME;
-			SetMp4Opt( argc, argv, mp4opt );
+			// Build up MP4INFO structure.
+			mp4info.m_pInFile = infile;
+			mp4info.m_pOutFile = ALS_TMP_FILENAME;
+			mp4info.m_RMflag = true;
+			mp4info.m_StripRaInfo = true;	// true:Strip RA info / false:Do not strip RA info
+			mp4info.m_RaLocation = 0;		// RAU size location: 0=frames, 1=header, 2=none
 
 			// Convert MP4 to ALS.
-			A2MERR	A2mErr = Mp4ToAls( mp4opt );
+			A2MERR	A2mErr = Mp4ToAls( mp4info );
 			if ( A2mErr != A2MERR_NONE ) {
 				fprintf( stderr, "\nERROR: Unable to convert MP4 to ALS: %s\n", ToErrorString( A2mErr ) );
 				remove( ALS_TMP_FILENAME );
@@ -724,17 +828,17 @@ int main(short argc, char **argv)
 		}
 
 		// Open Input File
-		if (result = decoder.OpenInputFile(mp4file ? mp4opt.m_pOutFile : infile))
+		if (result = decoder.OpenInputFile(mp4file ? mp4info.m_pOutFile : infile, mp4file))
 		{
-			fprintf(stderr, "\nUnable to open file %s for reading!\n", mp4file ? mp4opt.m_pOutFile : infile);
+			fprintf(stderr, "\nUnable to open file %s for reading!\n", mp4file ? mp4info.m_pOutFile : infile);
 			if ( mp4file ) remove( ALS_TMP_FILENAME );
-			exit(1);
+			exit(3);
 		}
 
 		// Analyse Input File
-		if (result = decoder.AnalyseInputFile(&ainfo, &encinfo))
+		if (result = decoder.AnalyseInputFile(&ainfo, &encinfo, mp4info))
 		{
-			fprintf(stderr, "\nERROR: %s is not a valid ALS file!\n", infile);
+			fprintf(stderr, "\nERROR: %s is not a valid ALS file!\n", mp4file ? mp4info.m_pOutFile : infile);
 			decoder.CloseFiles();
 			if ( mp4file ) remove( ALS_TMP_FILENAME );
 			exit(2);
@@ -751,19 +855,19 @@ int main(short argc, char **argv)
 			unsigned char samptype = ainfo.SampleType;
 			long freq = ainfo.Freq;
 			long chan = ainfo.Chan;
-			long samp = ainfo.Samples;
-			short type = ainfo.FileType;
+			ALS_INT64 samp = ainfo.Samples;
+			short type = mp4file ? mp4info.m_FileType : ainfo.FileType;
 			short msb = ainfo.MSBfirst;
-			unsigned long head = ainfo.HeaderSize;
-			unsigned long trail = ainfo.TrailerSize;
+			ALS_INT64 head = ainfo.HeaderSize;
+			ALS_INT64 trail = ainfo.TrailerSize;
 
 			printf("\nAudio Properties");
 			printf("\n  Sample type   : %s", ( samptype == 0 ) ? "int" : "float");
 			printf("\n  Resolution    : %d bit", res);
 			if ( samptype == 1 ) printf( " (int %d bit)", intres );
-			printf("\n  Sample Rate   : %d Hz", freq);
-			printf("\n  Channels      : %d ch", chan);
-			printf("\n  Samples/Chan. : %d", samp);
+			printf("\n  Sample Rate   : %ld Hz", freq);
+			printf("\n  Channels      : %ld ch", chan);
+			printf("\n  Samples/Chan. : " PRINTF_LL, samp);
 			printf("\n  Duration      : %.1f sec\n", playtime = (double)samp / freq);
 
 			long fl = encinfo.FrameLength;
@@ -777,7 +881,7 @@ int main(short argc, char **argv)
 			short pi = encinfo.PITCH;
 
 			printf("\nCodec Properties");
-			printf("\n  Frame Length  : %d", fl);
+			printf("\n  Frame Length  : %ld", fl);
 			printf("\n  BS Level      : %d", sb);
 			printf("\n  Pred. Order   : %d%s", mo, ap == 0 ? "" : " (max)");
 			printf("\n  Random Access : %s (%d frames)", ra == 0 ? "no" : "yes", ra);
@@ -790,13 +894,23 @@ int main(short argc, char **argv)
 			if (type == 0) strcpy(typestr, "RAW");
 			else if (type == 1) strcpy(typestr, "WAVE");
 			else if (type == 2) strcpy(typestr, "AIFF");
-			else strcpy(typestr, "UNKNOWN");
+			else if (type == 3) strcpy(typestr, "BWF");
+			else if (type == 4) strcpy(typestr, "Sony Wave64");
+			else if (type == 5) strcpy(typestr, "BWF with RF64");
+			else if ( ( type == 15 ) && mp4file && !mp4info.m_FileTypeName.empty() ) {
+				// Show original_MIME_type (ASCII char only)
+				const char*	pName = mp4info.m_FileTypeName.c_str();
+				while( *pName != '\0' ) {
+					if ( ( *pName >= 0x20 ) && ( *pName <= 0x7e ) ) putchar( *pName );
+					else putchar( ' ' );
+				}
+			} else strcpy(typestr, "UNKNOWN");
 
 			printf("\nFormat Properties");
 			printf("\n  Orig. Format  : %s", typestr);
 			printf("\n  Byte Order    : %s", msb ? "MSB first" : "LSB first");
-			printf("\n  Header Size   : %d bytes", head);
-			printf("\n  Trailer Size  : %d bytes\n", trail);
+			printf("\n  Header Size   : " PRINTF_LL " bytes", head);
+			printf("\n  Trailer Size  : " PRINTF_LL " bytes\n", trail);
 
 			if (info) {
 				decoder.CloseFiles();
@@ -808,15 +922,9 @@ int main(short argc, char **argv)
 		if (autoname)
 		{
 			// Append original file extension (if known)
-			tmp2 = strrchr( tmp, '.' );
-			if ( tmp2 != NULL ) {
-				if (ainfo.FileType == 1)
-					strcpy(tmp2 + 1, "wav");
-				else if (ainfo.FileType == 2)
-					strcpy(tmp2 + 1, "aif");
-				else
-					strcpy(tmp2 + 1, "raw");
-			}
+			static const char* KnownExt[5] = { "wav", "aif", "bwf", "w64", "bwf" };
+			if ( ( ainfo.FileType >= 1 ) && ( ainfo.FileType <= 5 ) ) strcpy( tmp2+1, KnownExt[ ainfo.FileType-1 ] );
+			else strcpy( tmp2+1, "raw" );
 			outfile = tmp;
 		}
 
@@ -831,13 +939,14 @@ int main(short argc, char **argv)
 
 		// Decoding ///////////////////////////////////////////////////////////////////////////////
 		if (!verbose)
-			crc = decoder.DecodeAll();
+			crc = decoder.DecodeAll( mp4info );
 		else
 		{
-			long frames, f, fpro, fpro_alt = 0, step = 1;
+			long fpro, fpro_alt = 0, step = 1;
+			ALS_INT64 frames, f;
 
 			// Analyse and decode header
-			if ((frames = decoder.WriteHeader()) < 1)
+			if ((frames = decoder.WriteHeader( mp4info )) < 1)
 				crc = (short)frames;
 			else
 			{
@@ -865,10 +974,10 @@ int main(short argc, char **argv)
 					}
 					if (verbose)
 					{
-						fpro = (f + 1) * 100 / frames;
+						fpro = static_cast<long>( (f + 1) * 100 / frames );
 						if ((fpro >= fpro_alt + step) || (fpro == 100))
 						{
-							printf("\b\b\b\b%3d%%", fpro_alt = fpro);
+							printf("\b\b\b\b%3ld%%", fpro_alt = fpro);
 							fflush(stdout);
 						}
 					}
@@ -877,7 +986,7 @@ int main(short argc, char **argv)
 				// Decode non-audio bytes (if there are any)
 				if (!crc)
 				{
-					if (decoder.WriteTrailer() < 0)
+					if (decoder.WriteTrailer( mp4info ) < 0)
 						crc = -2;
 					else
 						crc = (decoder.GetCRC() != 0);
@@ -936,13 +1045,6 @@ int main(short argc, char **argv)
 	return(0);
 }
 
-// Set MP4OPT structure except m_pInFile and m_pOutFile.
-void	SetMp4Opt( short argc, char** argv, MP4OPT& Opt )
-{
-	Opt.m_StripRaInfo = true;	// true:Strip RA info / false:Do not strip RA info
-	Opt.m_RaLocation = 0;		// RAU size location: 0=frames, 1=header, 2=none
-}
-
 // Show usage message
 void ShowUsage()
 {
@@ -954,15 +1056,15 @@ void ShowUsage()
 void ShowHelp()
 {
 	printf("\n%s - MPEG-4 Audio Lossless Coding (ALS), Reference Model Codec", CODEC_STR);
-    printf("\n  Version 18 for %s", SYSTEM_STR);
-	printf("\n  (c) 2003-2006 Tilman Liebchen, Technical University of Berlin");
+    printf("\n  Version 22 for %s", SYSTEM_STR);
+	printf("\n  (c) 2003-2008 Tilman Liebchen, TU Berlin / LG Electronics");
 	printf("\n    E-mail: liebchen@nue.tu-berlin.de");
     printf("\n  Portions by Yuriy A. Reznik, RealNetworks, Inc.");
     printf("\n    E-mail: yreznik@real.com");
     printf("\n  Portions by Koichi Sugiura, NTT Advanced Technology corporation");
 	printf("\n    E-mail: koichi.sugiura@ntt-at.co.jp");
     printf("\n  Portions by Takehiro Moriya, Noboru Harada and Yutaka Kamamoto, NTT");
-	printf("\n    E-mail: t.moriya@ieee.org, {n-harada,kamamoto}@theory.brl.ntt.co.jp");
+	printf("\n    E-mail: {moriya.takehiro,harada.noboru,kamamoto.yutaka}@lab.ntt.co.jp");
     printf("\n");
 	printf("\nUsage: %s [options] infile [outfile]\n", CODEC_STR);
 	printf("\n  In compression mode, infile must be a PCM file (wav, aif, or raw format)");
@@ -1002,6 +1104,7 @@ void ShowHelp()
 	printf("\n  -z# : RLSLMS mode (default = 0: no RLSLMS mode,  1-quick, 2-medium 3-best )");
 	printf("\nMP4 File Format Support:");
 	printf("\n  -MP4: Use MP4 file format for compressed file (default if extension is .mp4)");
+	printf("\n  -OAFI:Force to embed meta box with oafi record");
 	printf("\nAudio file support:");
 	printf("\n  -R  : Raw audio file (use -C, -W, -F and -M to specify format)");
 	printf("\n  -S# : Sample type: 0 = integer (default), 1 = float");

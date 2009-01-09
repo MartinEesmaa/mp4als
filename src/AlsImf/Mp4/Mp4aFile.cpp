@@ -1,45 +1,67 @@
-/******************* MPEG-4 Audio Lossless Coding ******************
- ******************* MPEG-A Audio Archival MAF    ******************
+/***************** MPEG-4 Audio Lossless Coding *********************
 
 This software module was originally developed by
 
 NTT (Nippon Telegraph and Telephone Corporation), Japan
 
-in the course of development of the MPEG-4 Audio standard ISO/IEC 
-14496-3, associated amendments and the ISO/IEC 23000-6: Audio 
-Archival Multimedia Application Format standard.
-This software module is an implementation of a part of one or more 
-MPEG-4 Audio lossless coding tools as specified by the MPEG-4 Audio 
-standard and ISO/IEC 23000-6: Audio Archival Multimedia Application 
-Format tools  as specified by the MPEG-A Requirements.
-ISO/IEC gives users of the MPEG-4 Audio standards and of ISO/IEC 
-23000-6: Audio Archival Multimedia Application Format free license 
-to this software module or modifications thereof for use in hardware 
-or software products claiming conformance to MPEG-4 Audio and MPEG-A.
-Those intending to use this software module in hardware or software 
-products are advised that its use may infringe existing patents. 
-The original developer of this software module and his/her company, 
-the subsequent editors and their companies, and ISO/IEC have no 
-liability for use of this software module or modifications thereof 
-in an implementation.
-Copyright is not released for non MPEG-4 / MPEG-A conforming 
-products. The organizations named above retain full rights to use 
-the code for their own purpose, assign or donate the code to a third 
-party and inhibit third parties from using the code for non MPEG-4 / 
-MPEG-A conforming products.
+in the course of development of the MPEG-4 Audio standard ISO/IEC 14496-3
+and associated amendments. This software module is an implementation of
+a part of one or more MPEG-4 Audio lossless coding tools as specified
+by the MPEG-4 Audio standard. ISO/IEC gives users of the MPEG-4 Audio
+standards free license to this software module or modifications
+thereof for use in hardware or software products claiming conformance
+to the MPEG-4 Audio standards. Those intending to use this software
+module in hardware or software products are advised that this use may
+infringe existing patents. The original developer of this software
+module, the subsequent editors and their companies, and ISO/IEC have
+no liability for use of this software module or modifications thereof
+in an implementation. Copyright is not released for non MPEG-4 Audio
+conforming products. The original developer retains full right to use
+the code for the developer's own purpose, assign or donate the code to
+a third party and to inhibit third party from using the code for non
+MPEG-4 Audio conforming products. This copyright notice must be included
+in all copies or derivative works.
 
 Copyright (c) 2006.
 
-This notice must be included in all copies or derivative works.
-
 Filename : Mp4aFile.cpp
-Project  : MPEG-A Audio Archival Multimedia Application Format
+Project  : MPEG-4 Audio Lossless Coding
 Author   : Koichi Sugiura (NTT Advanced Technology Corporation)
            Noboru Harada  (NTT)
 Date     : August 31st, 2006
 Contents : MPEG-4 Audio reader and writer
 
 *******************************************************************/
+
+/******************************************************************
+ *
+ * Modifications:
+ *
+ * 2007/05/10, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - supported header, trailer and aux data specifications
+ *     defined in N9071.
+ *   - changed the value of sample_rate in MP4AudioSampleEntry to 0 
+ *     in case that the sampling rate exceeds 65535.
+ *
+ * 2007/06/08, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added CreateCo64().
+ *   - modified CreateStbl() to switch stco to co64 when m_Use64bit 
+ *     is true.
+ *   - added m_MdatHeaderSize to save the mdat header size.
+ *   - modified CreateStco() and CreateCo64() to add m_MdatheaderSize 
+ *     instead of 8 to calculate offset positions.
+ *
+ * 2007/07/15, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added UseMeta flag in CMp4aWriter::Open().
+ *
+ * 2007/07/23, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added SetDecSpecInfo() to CMp4aWriter class.
+ *
+ * 2007/08/10, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - modified CMp4aReader::Open() to set m_OrgFileType to 0xff,
+ *     when oafi box is not present.
+ *
+ ******************************************************************/
 
 #include	<vector>
 #include	<ctime>
@@ -65,6 +87,9 @@ CMp4aReader::CMp4aReader( void )
 	m_pDecSpecInfo = NULL;
 	m_DecSpecInfoSize = 0;
 	m_MaxFrameSize = 0;
+	m_HeaderOffset = m_TrailerOffset = m_AuxDataOffset = 0;
+	m_HeaderSize = m_TrailerSize = m_AuxDataSize = 0;
+	m_OrgFileType = 0;
 	m_LastError = E_NONE;
 }
 
@@ -83,6 +108,7 @@ bool	CMp4aReader::Open( CBaseStream& Stream )
 	IMF_UINT32				Type;
 	IMF_INT64				Size;
 	CMovieBox*				pMoov = NULL;
+	CMetaBox*				pMeta = NULL;
 	CSampleDescriptionBox*	pStsd;
 	CMP4AudioSampleEntry*	pMp4a;
 	CChunkInfo				ChunkInfo;
@@ -108,15 +134,32 @@ bool	CMp4aReader::Open( CBaseStream& Stream )
 	if ( m_pDecSpecInfo ) { delete[] m_pDecSpecInfo; m_pDecSpecInfo = NULL; }
 	m_DecSpecInfoSize = 0;
 	m_MaxFrameSize = 0;
+	m_HeaderOffset = m_TrailerOffset = m_AuxDataOffset = 0;
+	m_HeaderSize = m_TrailerSize = m_AuxDataSize = 0;
+	m_OrgFileType = 0xff;	// 0xff means 'no file type detected'.
+	m_OrgMimeType.erase();
 
 	try {
-		// Read moov box.
+		// Read moov and meta boxes.
 		while( Reader.Peek( Stream, Type, Size ) ) {
 			if ( Type == IMF_FOURCC_MOOV ) {
+				if ( pMoov != NULL ) throw E_MP4A_MOOV;	// Too many moov boxes.
 				pMoov = reinterpret_cast<CMovieBox*>( Reader.Read( Stream ) );
-				break;
+				if ( pMoov == NULL ) throw E_MP4A_MOOV;	// Failed to read moov box.
+
+			} else if ( Type == IMF_FOURCC_META ) {
+				if ( pMeta != NULL ) throw E_MP4A_META;	// Too many meta boxes.
+				pMeta = reinterpret_cast<CMetaBox*>( Reader.Read( Stream ) );
+				if ( pMeta == NULL ) throw E_MP4A_META;	// Failed to read meta box.
+				// Check handler type.
+				pBox = NULL;
+				if ( !pMeta->FindBox( IMF_FOURCC_HDLR, pBox ) || ( reinterpret_cast<CHandlerBox*>( pBox )->m_handler_type != IMF_FOURCC_OAFI ) ) {
+					delete pMeta;
+					pMeta = NULL;
+				}
+			} else {
+				if ( !Reader.Skip( Stream ) ) throw Reader.GetLastError();
 			}
-			if ( !Reader.Skip( Stream ) ) throw Reader.GetLastError();
 		}
 		if ( pMoov == NULL ) throw E_MP4A_MOOV;
 
@@ -197,6 +240,78 @@ bool	CMp4aReader::Open( CBaseStream& Stream )
 			} else {
 				// No stsz/stz2 found.
 				throw E_MP4A_STSZ_STZ2;
+			}
+		}
+
+		if ( pMeta ) {
+			COrigAudioFileInfoRecord		Oafi;
+			COrigAudioFileInfoRecord*		pOafi = NULL;
+			const CItemLocationBox::CItem*	pItem;
+
+			// Search iloc box.
+			CItemLocationBox*	pIloc = NULL;
+			pBox = NULL;
+			if ( pMeta->FindBox( IMF_FOURCC_ILOC, pBox ) ) pIloc = reinterpret_cast<CItemLocationBox*>( pBox );
+
+			// Search pitm box.
+			pBox = NULL;
+			if ( pMeta->FindBox( IMF_FOURCC_PITM, pBox ) ) {
+				CPrimaryItemBox*				pPitm;
+				if ( pIloc == NULL ) throw E_MP4A_ILOC;										// No iloc box.
+				pPitm = reinterpret_cast<CPrimaryItemBox*>( pBox );
+				pItem = pIloc->GetItem( pPitm->m_item_ID );
+				if ( pItem == NULL ) throw E_MP4A_ILOC_NO_ITEM;								// No m_item_ID in iloc box.
+				if ( pItem->m_extent_data.size() != 1 ) throw E_MP4A_ILOC_EXTENT_DATA;		// Fragmentation is not supported.
+				if ( pItem->m_extent_data.front().m_extent_length >> 32 ) throw E_MP4A_ILOC_EXTENT_SIZE;	// Too big.
+				if ( !Stream.Seek( pItem->m_extent_data.front().m_extent_offset, CBaseStream::S_BEGIN ) ) throw E_SEEK_STREAM;
+				if ( !Oafi.Read( Stream, pItem->m_extent_data.front().m_extent_length ) ) throw E_MP4A_OAFI;
+				pOafi = &Oafi;
+
+			} else {
+				// Search data (oafi) box.
+				pBox = NULL;
+				if ( pMeta->FindBox( IMF_FOURCC_DATA, pBox ) ) pOafi = &reinterpret_cast<COrigAudioFileInfoBox*>( pBox )->m_oafi;
+			}
+
+			if ( pOafi ) {
+				m_OrgFileType = pOafi->m_file_type;
+				m_OrgMimeType = pOafi->m_original_MIME_type;
+
+				// Get header information.
+				if ( pOafi->m_header_item_ID == 0 ) {
+					m_HeaderOffset = 0;
+					m_HeaderSize = 0;
+				} else {
+					pItem = pIloc->GetItem( pOafi->m_header_item_ID );
+					if ( pItem == NULL ) throw E_MP4A_ILOC_NO_ITEM;							// No m_header_item_ID in iloc box.
+					if ( pItem->m_extent_data.size() != 1 ) throw E_MP4A_ILOC_EXTENT_DATA;	// Fragmentation is not supported.
+					m_HeaderOffset = pItem->m_extent_data.front().m_extent_offset;
+					m_HeaderSize = pItem->m_extent_data.front().m_extent_length;
+				}
+
+				// Get trailer information.
+				if ( pOafi->m_trailer_item_ID == 0 ) {
+					m_TrailerOffset = 0;
+					m_TrailerSize = 0;
+				} else {
+					pItem = pIloc->GetItem( pOafi->m_trailer_item_ID );
+					if ( pItem == NULL ) throw E_MP4A_ILOC_NO_ITEM;							// No m_trailer_item_ID in iloc box.
+					if ( pItem->m_extent_data.size() != 1 ) throw E_MP4A_ILOC_EXTENT_DATA;	// Fragmentation is not supported.
+					m_TrailerOffset = pItem->m_extent_data.front().m_extent_offset;
+					m_TrailerSize = pItem->m_extent_data.front().m_extent_length;
+				}
+
+				// Get auxiliary data information.
+				if ( pOafi->m_aux_item_ID == 0 ) {
+					m_AuxDataOffset = 0;
+					m_AuxDataSize = 0;
+				} else {
+					pItem = pIloc->GetItem( pOafi->m_aux_item_ID );
+					if ( pItem == NULL ) throw E_MP4A_ILOC_NO_ITEM;							// No m_aux_item_ID in iloc box.
+					if ( pItem->m_extent_data.size() != 1 ) throw E_MP4A_ILOC_EXTENT_DATA;	// Fragmentation is not supported.
+					m_AuxDataOffset = pItem->m_extent_data.front().m_extent_offset;
+					m_AuxDataSize = pItem->m_extent_data.front().m_extent_length;
+				}
 			}
 		}
 
@@ -332,6 +447,10 @@ bool	CMp4aReader::Close( void )
 	if ( m_pDecSpecInfo ) { delete[] m_pDecSpecInfo; m_pDecSpecInfo = NULL; }
 	m_DecSpecInfoSize = 0;
 	m_FrameInfo.clear();
+	m_HeaderOffset = m_TrailerOffset = m_AuxDataOffset = 0;
+	m_HeaderSize = m_TrailerSize = m_AuxDataSize = 0;
+	m_OrgFileType = 0;
+	m_OrgMimeType.erase();
 	return true;
 }
 
@@ -359,7 +478,12 @@ CMp4aWriter::CMp4aWriter( void )
 	m_pDecSpecInfo = NULL;
 	m_DecSpecInfoSize = 0;
 	m_Use64bit = false;
+	m_UseMeta = false;
 	m_MdatOffset = 0;
+	m_MdatHeaderSize = 0;
+	m_FileType = 0;
+	m_HeaderSize = m_TrailerSize = m_AuxDataSize = 0;
+	m_HeaderOffset = m_TrailerOffset = m_AuxDataOffset = 0;
 	m_LastError = E_NONE;
 }
 
@@ -372,17 +496,25 @@ CMp4aWriter::CMp4aWriter( void )
 // Frequency = Sampling frequency in Hz
 // Channels = Number of channels
 // Bits = Number of bits
+// FileType = File type
 // pDecSpecInfo = Pointer to decoder specific info
 // DecSpecInfoSize = Size of pDecSpecInfo in bytes
 // Use64bit = true:Use 64-bit / false:Use 32-bit
+// UseMeta = true:Use meta box / false:Do not use meta box
 // Return value = true:Success / false:Error
 // * Output stream must be kept opened while CMp4aWriter object is opened.
-bool	CMp4aWriter::Open( CBaseStream& Stream, IMF_UINT32 Frequency, IMF_UINT16 Channels, IMF_UINT16 Bits, const void* pDecSpecInfo, IMF_UINT32 DecSpecInfoSize, bool Use64bit )
+bool	CMp4aWriter::Open( CBaseStream& Stream, IMF_UINT32 Frequency, IMF_UINT16 Channels, IMF_UINT16 Bits, IMF_UINT8 FileType, const void* pDecSpecInfo, IMF_UINT32 DecSpecInfoSize, bool Use64bit, bool UseMeta )
 {
 	bool		Result = false;
 	CBox*		pBox = NULL;
 
 	if ( m_pStream != NULL ) { SetLastError( E_MP4A_ALREADY_OPENED ); return false; }
+
+	// Initialize meta box flag.
+	m_UseMeta = UseMeta;
+
+	// Use meta(oafi) box if FileType is overflowed in ALSSpecificConfig.
+	if ( FileType & ~0x3 ) m_UseMeta = true;
 
 	// Set member variables.
 	m_pStream = &Stream;
@@ -397,16 +529,12 @@ bool	CMp4aWriter::Open( CBaseStream& Stream, IMF_UINT32 Frequency, IMF_UINT16 Ch
 	m_Language[1] = 'n';
 	m_Language[2] = 'd';
 	m_Language[3] = '\0';
-	if ( m_pDecSpecInfo ) { delete[] m_pDecSpecInfo; m_pDecSpecInfo = NULL; }
-	m_DecSpecInfoSize = 0;
-	if ( DecSpecInfoSize > 0 ) {
-		m_pDecSpecInfo = new char [ DecSpecInfoSize ];
-		if ( m_pDecSpecInfo == NULL ) { SetLastError( E_MEMORY ); return false; }
-		memcpy( m_pDecSpecInfo, pDecSpecInfo, DecSpecInfoSize );
-		m_DecSpecInfoSize = DecSpecInfoSize;
-	}
+	if ( !SetDecSpecInfo( pDecSpecInfo, DecSpecInfoSize ) ) return false;
 	m_FrameInfo.clear();
 	m_Use64bit = Use64bit;
+	m_FileType = FileType;
+	m_HeaderSize = m_TrailerSize = m_AuxDataSize = 0;
+	m_HeaderOffset = m_TrailerOffset = m_AuxDataOffset = 0;
 
 	try {
 		// Write ftyp box.
@@ -424,9 +552,11 @@ bool	CMp4aWriter::Open( CBaseStream& Stream, IMF_UINT32 Frequency, IMF_UINT16 Ch
 		if ( m_Use64bit ) {
 			pBox->m_size = 1;
 			pBox->m_largesize = 16;
+			m_MdatHeaderSize = 16;
 		} else {
 			pBox->m_size = 8;
 			pBox->m_largesize = 0;
+			m_MdatHeaderSize = 8;
 		}
 		if ( !pBox->CBox::Write( *m_pStream ) ) throw pBox->GetLastError();	// Invoke CBox::Write in order to skip size check.
 		delete pBox;
@@ -444,6 +574,72 @@ bool	CMp4aWriter::Open( CBaseStream& Stream, IMF_UINT32 Frequency, IMF_UINT16 Ch
 	if ( pBox ) delete pBox;
 
 	return Result;
+}
+
+////////////////////////////////////////
+//                                    //
+//       Write original header        //
+//                                    //
+////////////////////////////////////////
+// pHeader = Pointer to original header data
+// HeaderSize = Header size in bytes
+// Return value = true:Success / false:Error
+bool	CMp4aWriter::WriteHeader( const void* pHeader, IMF_UINT32 HeaderSize )
+{
+	if ( m_pStream == NULL ) { SetLastError( E_MP4A_NOT_OPENED ); return false; }
+
+	if ( m_HeaderSize == 0 ) m_HeaderOffset = m_pStream->Tell();
+	if ( m_pStream->Write( pHeader, HeaderSize ) != HeaderSize ) { SetLastError( E_WRITE_STREAM ); return false; }
+	m_HeaderSize += HeaderSize;
+	if ( m_HeaderSize < 0 ) { SetLastError( E_MP4A_HEADER_SIZE ); return false; }
+
+	// Use meta(oafi) box when header is set explicitly.
+	m_UseMeta = true;
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//       Write original trailer       //
+//                                    //
+////////////////////////////////////////
+// pTrailer = Pointer to original trailer data
+// TrailerSize = Trailer size in bytes
+// Return value = true:Success / false:Error
+bool	CMp4aWriter::WriteTrailer( const void* pTrailer, IMF_UINT32 TrailerSize )
+{
+	if ( m_pStream == NULL ) { SetLastError( E_MP4A_NOT_OPENED ); return false; }
+
+	if ( m_TrailerSize == 0 ) m_TrailerOffset = m_pStream->Tell();
+	if ( m_pStream->Write( pTrailer, TrailerSize ) != TrailerSize ) { SetLastError( E_WRITE_STREAM ); return false; }
+	m_TrailerSize += TrailerSize;
+	if ( m_TrailerSize < 0 ) { SetLastError( E_MP4A_TRAILER_SIZE ); return false; }
+
+	// Use meta(oafi) box when trailer is set explicitly.
+	m_UseMeta = true;
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//        Write auxiliary data        //
+//                                    //
+////////////////////////////////////////
+// pAuxData = Pointer to auxiliary data
+// AuxDataSize = Auxiliary size in bytes
+// Return value = true:Success / false:Error
+bool	CMp4aWriter::WriteAuxData( const void* pAuxData, IMF_UINT32 AuxDataSize )
+{
+	if ( m_pStream == NULL ) { SetLastError( E_MP4A_NOT_OPENED ); return false; }
+
+	if ( m_AuxDataSize == 0 ) m_AuxDataOffset = m_pStream->Tell();
+	if ( m_pStream->Write( pAuxData, AuxDataSize ) != AuxDataSize ) { SetLastError( E_WRITE_STREAM ); return false; }
+	m_AuxDataSize += AuxDataSize;
+	if ( m_AuxDataSize < 0 ) { SetLastError( E_MP4A_AUXDATA_SIZE ); return false; }
+
+	// Use meta(oafi) box when aux data is set explicitly.
+	m_UseMeta = true;
+	return true;
 }
 
 ////////////////////////////////////////
@@ -475,6 +671,32 @@ bool	CMp4aWriter::WriteFrame( const void* pFrame, IMF_UINT32 EncSize, IMF_UINT32
 
 ////////////////////////////////////////
 //                                    //
+//     Set decoder specific info      //
+//                                    //
+////////////////////////////////////////
+// pDecSpecInfo = Pointer to decoder specific info data
+// DecSpecInfoSize = Size of decoder specific info in bytes
+// Return value = true:Success / false:Error
+bool	CMp4aWriter::SetDecSpecInfo( const void* pDecSpecInfo, IMF_UINT32 DecSpecInfoSize )
+{
+	// Clear the existing decoder specific info.
+	if ( m_pDecSpecInfo ) {
+		delete[] m_pDecSpecInfo;
+		m_pDecSpecInfo = NULL;
+	}
+	m_DecSpecInfoSize = 0;
+
+	if ( DecSpecInfoSize > 0 ) {
+		m_pDecSpecInfo = new char [ DecSpecInfoSize ];
+		if ( m_pDecSpecInfo == NULL ) { SetLastError( E_MEMORY ); return false; }
+		memcpy( m_pDecSpecInfo, pDecSpecInfo, DecSpecInfoSize );
+		m_DecSpecInfoSize = DecSpecInfoSize;
+	}
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
 //           Close MP4 file           //
 //                                    //
 ////////////////////////////////////////
@@ -496,6 +718,12 @@ bool	CMp4aWriter::Close( void )
 			TotalSize += i->m_EncSize;
 			if ( TotalSize < 0 ) throw E_MP4A_MDAT_SIZE;
 		}
+		TotalSize += m_HeaderSize;
+		if ( TotalSize < 0 ) throw E_MP4A_MDAT_SIZE;
+		TotalSize += m_TrailerSize;
+		if ( TotalSize < 0 ) throw E_MP4A_MDAT_SIZE;
+		TotalSize += m_AuxDataSize;
+		if ( TotalSize < 0 ) throw E_MP4A_MDAT_SIZE;
 
 		// Re-write mdat box size.
 		pBox = CreateBox( IMF_FOURCC_MDAT );
@@ -522,6 +750,15 @@ bool	CMp4aWriter::Close( void )
 		if ( ( pBox->CalcSize() < 0 ) || !pBox->Write( *m_pStream ) ) throw pBox->GetLastError();
 		delete pBox;
 		pBox = NULL;
+
+		if ( m_UseMeta ) {
+			// Write meta box.
+			pBox = CreateBox( IMF_FOURCC_META );
+			if ( pBox == NULL ) throw false;
+			if ( ( pBox->CalcSize() < 0 ) || !pBox->Write( *m_pStream ) ) throw pBox->GetLastError();
+			delete pBox;
+			pBox = NULL;
+		}
 
 		Result = true;
 	}
@@ -564,6 +801,7 @@ bool	CMp4aWriter::AddBoxes( CBoxVector& Boxes, const IMF_UINT32* pTypes, CBox* p
 			pTypes++;
 		}
 		if ( pBox == NULL ) return false;
+		pBox->m_pParent = pParent;
 		Boxes.push_back( pBox );
 	}
 	return true;
@@ -600,7 +838,11 @@ CBox*	CMp4aWriter::CreateBox( IMF_UINT32 Type, IMF_UINT32 HandlerType )
 	case	IMF_FOURCC_STSZ:	p = CreateStsz();				break;
 	case	IMF_FOURCC_STSC:	p = CreateStsc();				break;
 	case	IMF_FOURCC_STCO:	p = CreateStco();				break;
+	case	IMF_FOURCC_CO64:	p = CreateCo64();				break;
 	case	IMF_FOURCC_MDAT:	p = CreateMdat();				break;
+	case	IMF_FOURCC_META:	p = CreateMeta();				break;
+	case	IMF_FOURCC_DATA:	p = CreateData();				break;
+	case	IMF_FOURCC_ILOC:	p = CreateIloc();				break;
 	}
 	return p;
 }
@@ -861,7 +1103,8 @@ CBox*	CMp4aWriter::CreateDref( void )
 ////////////////////////////////////////
 CBox*	CMp4aWriter::CreateStbl( void )
 {
-	static	const	IMF_UINT32	BoxTypes[] = { IMF_FOURCC_STSD, IMF_FOURCC_STTS, IMF_FOURCC_STSZ, IMF_FOURCC_STSC, IMF_FOURCC_STCO, 0 };
+	IMF_UINT32	BoxTypes[] = { IMF_FOURCC_STSD, IMF_FOURCC_STTS, IMF_FOURCC_STSZ, IMF_FOURCC_STSC, IMF_FOURCC_STCO, 0 };
+	if ( m_Use64bit ) BoxTypes[4] = IMF_FOURCC_CO64;
 	CSampleTableBox*	p = new CSampleTableBox();
 	if ( p ) {
 		if ( !AddBoxes( p->m_Boxes, BoxTypes, p ) ) { delete p; return NULL; }
@@ -934,7 +1177,8 @@ CBox*	CMp4aWriter::CreateStsd( void )
 #else
 		if ( m_SamplingFrequency >> 16 ) { SetLastError( E_MP4A_STSD_FREQUENCY ); delete p; return NULL; }
 #endif
-		pEntry->m_samplerate = m_SamplingFrequency << 16;
+		if ( m_SamplingFrequency >> 16 ) pEntry->m_samplerate = 0;	// Store 0 when the m_SamplingFrequency exceeds 0xffff.
+		else pEntry->m_samplerate = m_SamplingFrequency << 16;		// Store m_SamplingFrequency in the form of '16.16'.
 
 		// Set ES_Descriptor.
 		CMp4ES_Descriptor&	ES = pEntry->m_ES.m_ES;
@@ -1091,16 +1335,51 @@ CBox*	CMp4aWriter::CreateStsc( void )
 CBox*	CMp4aWriter::CreateStco( void )
 {
 	vector<CFrameInfo>::const_iterator	i;
-	IMF_INT64	Offset = this->m_MdatOffset;
+	IMF_INT64	Offset = m_MdatOffset;
 
 	if ( Offset < 0 ) return NULL;
-	Offset += 8;
+
+	Offset += m_MdatHeaderSize;
+	if ( Offset < 0 ) return NULL;
+
+	Offset += m_HeaderSize;
+	if ( Offset < 0 ) return NULL;
 
 	CChunkOffsetBox*	p = new CChunkOffsetBox();
 	if ( p ) {
 		for( i=m_FrameInfo.begin(); i!=m_FrameInfo.end(); i++ ) {
 			if ( ( Offset < 0 ) || ( Offset >> 32 ) ) { SetLastError( E_MP4A_STCO_OFFSET ); delete p; return NULL; }
 			if ( i->m_SyncFlag ) p->m_chunk_offsets.push_back( static_cast<IMF_UINT32>( Offset ) );
+			Offset += i->m_EncSize;
+		}
+	} else {
+		SetLastError( E_MEMORY );
+	}
+	return p;
+}
+
+////////////////////////////////////////
+//                                    //
+//          Create co64 box           //
+//                                    //
+////////////////////////////////////////
+CBox*	CMp4aWriter::CreateCo64( void )
+{
+	vector<CFrameInfo>::const_iterator	i;
+	IMF_INT64	Offset = m_MdatOffset;
+
+	if ( Offset < 0 ) return NULL;
+
+	Offset += m_MdatHeaderSize;
+	if ( Offset < 0 ) return NULL;
+
+	Offset += m_HeaderSize;
+	if ( Offset < 0 ) return NULL;
+
+	CChunkLargeOffsetBox*	p = new CChunkLargeOffsetBox();
+	if ( p ) {
+		for( i=m_FrameInfo.begin(); i!=m_FrameInfo.end(); i++ ) {
+			if ( i->m_SyncFlag ) p->m_chunk_offsets.push_back( Offset );
 			Offset += i->m_EncSize;
 		}
 	} else {
@@ -1119,6 +1398,109 @@ CBox*	CMp4aWriter::CreateMdat( void )
 {
 	CBox*	p = new CMediaDataBox();
 	if ( p == NULL ) SetLastError( E_MEMORY );
+	return p;
+}
+
+////////////////////////////////////////
+//                                    //
+//          Create meta box           //
+//                                    //
+////////////////////////////////////////
+CBox*	CMp4aWriter::CreateMeta( void )
+{
+	static	const	IMF_UINT32	BoxTypes[] = { IMF_FOURCC_HDLR, IMF_FOURCC_OAFI, IMF_FOURCC_DATA, IMF_FOURCC_ILOC, 0 };
+	CMetaBox*	p = new CMetaBox();
+	if ( p ) {
+		if ( !AddBoxes( p->m_Boxes, BoxTypes, p ) ) { delete p; return NULL; }
+	} else {
+		SetLastError( E_MEMORY );
+	}
+	return p;
+}
+
+////////////////////////////////////////
+//                                    //
+//          Create data box           //
+//                                    //
+////////////////////////////////////////
+CBox*	CMp4aWriter::CreateData( void )
+{
+	COrigAudioFileInfoBox*	p = new COrigAudioFileInfoBox();
+	IMF_UINT16	ItemID = 1;
+
+	if ( p ) {
+		// File type
+		if ( m_FileType & 0xf0 ) { SetLastError( E_MP4A_OAFI_FILETYPE ); delete p; return NULL; }
+		p->m_oafi.m_file_type = m_FileType;
+		// Header item ID
+		if ( m_HeaderSize > 0 ) p->m_oafi.m_header_item_ID = ItemID++;
+		else p->m_oafi.m_header_item_ID = 0;
+		// Trailer item ID
+		if ( m_TrailerSize > 0 ) p->m_oafi.m_trailer_item_ID = ItemID++;
+		else p->m_oafi.m_trailer_item_ID = 0;
+		// AuxData item ID
+		if ( m_AuxDataSize > 0 ) p->m_oafi.m_aux_item_ID = ItemID++;
+		else p->m_oafi.m_aux_item_ID = 0;
+	} else {
+		SetLastError( E_MEMORY );
+	}
+	return p;
+}
+
+////////////////////////////////////////
+//                                    //
+//          Create iloc box           //
+//                                    //
+////////////////////////////////////////
+CBox*	CMp4aWriter::CreateIloc( void )
+{
+	CItemLocationBox*				p = new CItemLocationBox();
+	CItemLocationBox::CItem			Item;
+	CItemLocationBox::ILOC_EXTENT	Extent;
+	IMF_UINT16						Index = 1;
+
+	if ( p ) {
+		// Calculate bit-width of each parameter.
+		if ( ( m_HeaderSize == 0 ) && ( m_TrailerSize == 0 ) && ( m_AuxDataSize == 0 ) ) {
+			p->m_base_offset_size = p->m_offset_size = p->m_length_size = 0;
+		} else {
+			p->m_length_size = ( ( m_HeaderSize >> 32 ) || ( m_TrailerSize >> 32 ) || ( m_AuxDataSize >> 32 ) ) ? 8 : 4;
+			p->m_offset_size = ( ( m_HeaderOffset >> 32 ) || ( m_TrailerOffset >> 32 ) || ( m_AuxDataOffset >> 32 ) ) ? 8 : 4;
+			p->m_base_offset_size = p->m_offset_size;
+		}
+
+		Item.m_data_reference_index = 0;
+		Item.m_extent_data.push_back( Extent );
+
+		// Original header
+		if ( m_HeaderSize > 0 ) {
+			Item.m_item_ID = Index++;
+			Item.m_base_offset = m_HeaderOffset;
+			Item.m_extent_data.front().m_extent_offset = m_HeaderOffset;
+			Item.m_extent_data.front().m_extent_length = m_HeaderSize;
+			p->m_items.push_back( Item );
+		}
+
+		// Original trailer
+		if ( m_TrailerSize > 0 ) {
+			Item.m_item_ID = Index++;
+			Item.m_base_offset = m_TrailerOffset;
+			Item.m_extent_data.front().m_extent_offset = m_TrailerOffset;
+			Item.m_extent_data.front().m_extent_length = m_TrailerSize;
+			p->m_items.push_back( Item );
+		}
+
+		// Auxiliary data
+		if ( m_AuxDataSize > 0 ) {
+			Item.m_item_ID = Index++;
+			Item.m_base_offset = m_AuxDataOffset;
+			Item.m_extent_data.front().m_extent_offset = m_AuxDataOffset;
+			Item.m_extent_data.front().m_extent_length = m_AuxDataSize;
+			p->m_items.push_back( Item );
+		}
+	} else {
+		SetLastError( E_MEMORY );
+	}
 	return p;
 }
 

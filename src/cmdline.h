@@ -48,9 +48,12 @@ contents : Header file for cmdline.cpp
  * 06/08/2005, Tilman Liebchen <liebchen@nue.tu-berlin.de>
  *   - changed GetOptionValue() to long, removed GetOptionValueL(), 
  *
+ * 11/28/2008, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - added the "const" keyword to fix some compiler warnings
+ *
  *************************************************************************/
 
-short CheckOption(short argc, char **argv, char *opt);
-long GetOptionValue(short argc, char **argv, char *opt, long default_value = 0);
-long GetOptionValues(short argc, char **argv, char *opt, long N, unsigned short *val);
+short CheckOption(short argc, char **argv, const char *opt);
+long GetOptionValue(short argc, char **argv, const char *opt, long default_value = 0);
+long GetOptionValues(short argc, char **argv, const char *opt, long N, unsigned short *val);
 bool GetFOption( short argc, char** argv, short& AcfMode, float& AcfValue, short& MlzMode );

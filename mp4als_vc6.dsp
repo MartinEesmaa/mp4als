@@ -25,7 +25,7 @@ CFG=mp4als - Win32 Debug
 # PROP AllowPerConfigDependencies 0
 # PROP Scc_ProjName ""
 # PROP Scc_LocalPath ""
-CPP=cl.exe
+CPP=xicl6.exe
 RSC=rc.exe
 
 !IF  "$(CFG)" == "mp4als - Win32 Release"
@@ -42,15 +42,15 @@ RSC=rc.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /c
-# ADD CPP /nologo /W3 /GX /O2 /I "src/AlsImf" /I "src/AlsImf/Mp4" /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /D "WARN_BUFFERSIZEDB_OVER_24BIT" /D "PERMIT_SAMPLERATE_OVER_16BIT" /FR /YX /FD /c
+# ADD CPP /nologo /W3 /GX /O2 /I "src/AlsImf" /I "src/AlsImf/Mp4" /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /D "WARN_BUFFERSIZEDB_OVER_24BIT" /D "PERMIT_SAMPLERATE_OVER_16BIT" /D "LPC_ADAPT" /FR /YX /FD /c
 # ADD BASE RSC /l 0x407 /d "NDEBUG"
 # ADD RSC /l 0x407 /d "NDEBUG"
 BSC32=bscmake.exe
 # ADD BASE BSC32 /nologo
 # ADD BSC32 /nologo
-LINK32=link.exe
-# ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib lib/win/lpc_adapt.obj /nologo /subsystem:console /machine:I386 /out:"bin/win/Release/mp4alsRM18.exe"
+LINK32=xilink6.exe
+# ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib /nologo /subsystem:console /machine:I386
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib lib/win/lpc_adapt_vc6_win32_release.obj /nologo /subsystem:console /machine:I386 /out:"bin/win/Release/mp4alsRM22rev2.exe"
 # SUBTRACT LINK32 /profile
 
 !ELSEIF  "$(CFG)" == "mp4als - Win32 Debug"
@@ -67,15 +67,15 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /GZ /c
-# ADD CPP /nologo /W3 /Gm /GX /ZI /I "src/AlsImf" /I "src/AlsImf/Mp4" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /D "WARN_BUFFERSIZEDB_OVER_24BIT" /D "PERMIT_SAMPLERATE_OVER_16BIT" /FR /YX /FD /GZ /c
+# ADD CPP /nologo /W3 /Gm /GX /ZI /I "src/AlsImf" /I "src/AlsImf/Mp4" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /D "WARN_BUFFERSIZEDB_OVER_24BIT" /D "PERMIT_SAMPLERATE_OVER_16BIT" /D "LPC_ADAPT" /FR /YX /FD /GZ /c
 # ADD BASE RSC /l 0x407 /d "_DEBUG"
 # ADD RSC /l 0x407 /d "_DEBUG"
 BSC32=bscmake.exe
 # ADD BASE BSC32 /nologo
 # ADD BSC32 /nologo
-LINK32=link.exe
-# ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386 /pdbtype:sept
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib lib/win/lpc_adapt.obj /nologo /subsystem:console /debug /machine:I386 /nodefaultlib:"libc.lib" /out:"bin/win/Debug/mp4alsRM18.exe" /pdbtype:sept
+LINK32=xilink6.exe
+# ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib /nologo /subsystem:console /debug /machine:I386 /pdbtype:sept
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib lib/win/lpc_adapt_vc6_win32_debug.obj /nologo /subsystem:console /debug /machine:I386 /nodefaultlib:"libc.lib" /out:"bin/win/Debug/mp4alsRM22rev2.exe" /pdbtype:sept
 # SUBTRACT LINK32 /nodefaultlib
 
 !ENDIF 
@@ -142,6 +142,10 @@ SOURCE=.\src\mp4als.cpp
 # Begin Source File
 
 SOURCE=.\src\rn_bitio.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\stream.cpp
 # End Source File
 # Begin Source File
 
@@ -213,6 +217,10 @@ SOURCE=.\src\rn_bitio.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\stream.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\wave.h
 # End Source File
 # End Group
@@ -249,14 +257,6 @@ SOURCE=.\src\AlsImf\ImfBox.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\src\AlsImf\ImfBoxAmd1.cpp
-# End Source File
-# Begin Source File
-
-SOURCE=.\src\AlsImf\ImfBoxAmd1.h
-# End Source File
-# Begin Source File
-
 SOURCE=.\src\AlsImf\ImfDescriptor.cpp
 # End Source File
 # Begin Source File
@@ -270,6 +270,14 @@ SOURCE=.\src\AlsImf\ImfFileStream.cpp
 # Begin Source File
 
 SOURCE=.\src\AlsImf\ImfFileStream.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfPrintStream.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\AlsImf\ImfPrintStream.h
 # End Source File
 # Begin Source File
 

@@ -169,7 +169,7 @@ short fast_bitcount(INT64 temp)
 //                 length N and shift out buf[0] 
 /*************************************************************************/
 
-void buffer_update(long x, long *buf, short N)
+void buffer_update(int x, int *buf, short N)
 {
 	short j;
 	j = N-1;
@@ -198,7 +198,7 @@ void reinit_P(P_TYPE *Pmatrix)
 // This function multiply two matrixs P (MxM) and x(Mx1) and store the
 // result in yi (Mx1) which is scaled to the factor vscale
 /***********************************************************************/ 
-void MulMtxVec(P_TYPE *P, long *x, short M, long *yi, short *vscale)
+void MulMtxVec(P_TYPE *P, int *x, short M, int *yi, short *vscale)
 {
 	short i,j,pscale,nscale;
 	INT64 imax,temp,ya[256];
@@ -224,14 +224,14 @@ void MulMtxVec(P_TYPE *P, long *x, short M, long *yi, short *vscale)
 	{
 		nscale -= 28;
 		for(i=0;i<M;i++)
-			yi[i] = (long) (ya[i]>>nscale); // extract the lower 32 bit
+			yi[i] = (int) (ya[i]>>nscale); // extract the lower 32 bit
 		*vscale = nscale-pscale;
 	}
 	else
 	{
 		nscale -=28;
 		for(i=0;i<M;i++)
-			yi[i] = (long) ya[i]; // extract the lower 32 bit
+			yi[i] = (int) ya[i]; // extract the lower 32 bit
 		*vscale = -pscale;
 	}
 }
@@ -241,7 +241,7 @@ void MulMtxVec(P_TYPE *P, long *x, short M, long *yi, short *vscale)
 // This function multiply two vector x (1xM) and y(Mx1) and return the 
 // result z which is scaled to the factor scale
 /***********************************************************************/ 
-INT64 MulVecVec(long *x, long *y, short M, short *scale)
+INT64 MulVecVec(int *x, int *y, short M, short *scale)
 {
 	short i;
 	INT64 z,zh,temp;
@@ -278,12 +278,12 @@ INT64 MulVecVec(long *x, long *y, short M, short *scale)
 // lambda	- the forgetting factor in classics RLS filter algorithm
 // The routine also compute the error and store in *x
 /*************************************************************************/
-void UpdateRLSFilter(long *x, long y, W_TYPE *w, short M, 
-					 long *bufl, P_TYPE *P, short lambda)
+void UpdateRLSFilter(int *x, int y, W_TYPE *w, short M, 
+					 int *bufl, P_TYPE *P, short lambda)
 {
 	short i,j,shift,vscale,dscale;
 	INT64 k[256],wtemp,wtemp2,htemp,ir,htemp1;
-	long vl[256],lr,e,shifted_e;
+	int vl[256],lr,e,shifted_e;
 
 	e = (*x-y);					// compute the error in X.4 format
 
@@ -294,7 +294,7 @@ void UpdateRLSFilter(long *x, long y, W_TYPE *w, short M,
 	wtemp = MulVecVec(bufl, vl, M, &dscale);
 	assert((vscale+dscale)<64);
 	i = 0;
-	while(wtemp> LONG_MAX/4 && wtemp!=0) {wtemp>>=1;i++;}
+	while(wtemp> INT_MAX/4 && wtemp!=0) {wtemp>>=1;i++;}
 	i += vscale + dscale;
 	if (i<=60)
 		wtemp += (((INT64) 1)<<(60-i));
@@ -324,7 +324,7 @@ void UpdateRLSFilter(long *x, long y, W_TYPE *w, short M,
 	{
 		ir = (((INT64)1)<<(90-i))/(wtemp2);
 	}
-	lr = (long) ir;
+	lr = (int) ir;
 	htemp1 = 0;
 	for (i=0; i<M; i++)
 	{
@@ -358,7 +358,7 @@ void UpdateRLSFilter(long *x, long y, W_TYPE *w, short M,
 	{
 		htemp = (((INT64) k[i] * shifted_e)>>(30-dscale));
 		wtemp = w[i] + ROUND2(htemp);
-		w[i] = (long) wtemp;
+		w[i] = (int) wtemp;
 	}
 	vscale += dscale;
 	// Step3. Update P matrix
@@ -377,7 +377,7 @@ void UpdateRLSFilter(long *x, long y, W_TYPE *w, short M,
 			P[j*M+i] = P[i*M+j];
 	// Buffer update
 	buffer_update(*x>>4,bufl,M);
-	*x = (long) e;
+	*x = (int) e;
 }
 
 /***********************************************************/
@@ -473,16 +473,16 @@ void predict_init(rlslms_buf_ptr *rlslms_ptr)
 // of weights and output the final predictor.  The final error is computed
 // and used to update the weight of the LMS filter only.
 /************************************************************************/
-long SignLMS(long x, long *predict, W_TYPE *w, short M, short RA, short mode)
+int SignLMS(int x, int *predict, W_TYPE *w, short M, short RA, short mode)
 {
 	short i;
 	INT64 y,e,temp;
-	long wchange;
+	int wchange;
     y = 0;
 	for (i=0; i<M; i++)
 		y += (INT64) w[i]*predict[i];  // 8.24 * 24.4 -> 32.28 format
 	y >>= 24 ;                // shiftL 24 -> 32.4 format
-	assert(y<LONG_MAX && y>LONG_MIN);
+	assert(y<INT_MAX && y>INT_MIN);
 	if (mode==ENCODE)
 		e = (x<<4) - y;  // compute the error to update the weight
 	else // decode mode
@@ -498,14 +498,14 @@ long SignLMS(long x, long *predict, W_TYPE *w, short M, short RA, short mode)
 			if (predict[i] >= 0)
 			{
 				temp = w[i];
-				if (temp<LONG_MAX) temp += wchange;
-				w[i] = (long) temp;
+				if (temp<INT_MAX) temp += wchange;
+				w[i] = (int) temp;
 			}
 			else
 			{
 				temp = w[i];
-				if (temp>LONG_MIN) temp -= wchange;
-				w[i] = (long) temp;
+				if (temp>INT_MIN) temp -= wchange;
+				w[i] = (int) temp;
 			}
 		}
 	}
@@ -516,14 +516,14 @@ long SignLMS(long x, long *predict, W_TYPE *w, short M, short RA, short mode)
 			if (predict[i]>0)
 			{
 				temp = w[i];
-				if (temp>LONG_MIN) temp -= wchange;
-				w[i] = (long) temp;
+				if (temp>INT_MIN) temp -= wchange;
+				w[i] = (int) temp;
 			}
 			else
 			{
 				temp = w[i];
-				if (temp<LONG_MAX) temp += wchange;
-				w[i] = (long) temp;
+				if (temp<INT_MAX) temp += wchange;
+				w[i] = (int) temp;
 			}
 		}
 	}
@@ -554,20 +554,20 @@ void cal_power(INT64 *pow, BUF_TYPE *buf, short M)
 // multiplication of two matrix 1xM weight and Mx1 buf, resulting 
 // in a 1x1 predictor value
 /*******************************************************************/  
-inline long gen_rls_predictor(BUF_TYPE *buf, W_TYPE *w, short M)
+inline int gen_rls_predictor(BUF_TYPE *buf, W_TYPE *w, short M)
 {
 	INT64 y;
 	// Filter output
 	y = 0;
-	if (M==0) return ((long) y);
+	if (M==0) return ((int) y);
 	while(M-- >0)
 	{
 		y += ((INT64) *w++ * *buf++);  // 14.16 * 24.0  -> 38.16
 	}
 	y >>= 12;  // 28.4
-	if (y > LONG_MAX/2) y = LONG_MAX/2;   // clip to 24.4
-	if (y < LONG_MIN/2) y = LONG_MIN/2;   
-	return((long) y);
+	if (y > INT_MAX/2) y = INT_MAX/2;   // clip to 24.4
+	if (y < INT_MIN/2) y = INT_MIN/2;   
+	return((int) y);
 }
 
 /*******************************************************************/
@@ -577,7 +577,7 @@ inline long gen_rls_predictor(BUF_TYPE *buf, W_TYPE *w, short M)
 // multiplication of two matrix 1xM weight and Mx1 buf, resulting 
 // in a 1x1 predictor value
 /*******************************************************************/  
-inline long gen_predictor(BUF_TYPE *buf, W_TYPE *w, short M)
+inline int gen_predictor(BUF_TYPE *buf, W_TYPE *w, short M)
 {
 	INT64 y;
 	// Filter output
@@ -589,7 +589,7 @@ inline long gen_predictor(BUF_TYPE *buf, W_TYPE *w, short M)
 	y >>= 20;   // change y to 28.4 format 
 	if (y > 0x7ffffff)	y = 0x7ffffff;   // clip to 24.4
 	if (y < -0x7ffffff) y = -0x7ffffff;   
-	return((long) y);
+	return((int) y);
 }
 
 /*************************************************************************/
@@ -605,12 +605,12 @@ inline long gen_predictor(BUF_TYPE *buf, W_TYPE *w, short M)
 // *pow     - ptr to the energy of the history buffer
 // The routine also compute the error and store in *x
 /*************************************************************************/
-inline void update_predictor(long *x, long y, BUF_TYPE *buf, 
+inline void update_predictor(int *x, int y, BUF_TYPE *buf, 
 							 W_TYPE *w, short M, short mu, INT64 *pow)
 {
 	short i,j;
 	INT64 fact, wtemp,e,wtemp1;
-	long temp;
+	int temp;
 
 	// Prediction error
 	e =  (*x - y);   // y is 24.4 format change x to 24.4
@@ -618,12 +618,12 @@ inline void update_predictor(long *x, long y, BUF_TYPE *buf,
 	// Weight update
 	wtemp1 = wtemp = ((INT64) mu * (*pow>>7));
 	i = 0;
-	while(wtemp> LONG_MAX) {wtemp>>=1;i++;}
+	while(wtemp> INT_MAX) {wtemp>>=1;i++;}
 	fact = ((INT64) e<<(29-i))/(INT64)((wtemp1 + 1)>>i);   
        													
-	//assert(fact<LONG_MAX && fact >LONG_MIN);
+	//assert(fact<INT_MAX && fact >INT_MIN);
 	for (j=0; j<M; j++)
-		w[j] = w[j] + (long)  (((INT64) buf[j]* (INT64) fact + 0x8000)>>16);
+		w[j] = w[j] + (int)  (((INT64) buf[j]* (INT64) fact + 0x8000)>>16);
 
 	// NLMS power update
     temp = (*x)>>4;
@@ -635,7 +635,7 @@ inline void update_predictor(long *x, long y, BUF_TYPE *buf,
 	buffer_update(temp,buf,M);
 
 	// Predictor output
-	*x = (long) e ;
+	*x = (int) e ;
 }
 
 /***********************************************************************/
@@ -657,7 +657,7 @@ inline void update_predictor(long *x, long y, BUF_TYPE *buf,
 //  The function output the residual error or orignal sample into the 
 //  array *d depending on encoding or decoding.
 /***********************************************************************/  
-void predict(long *x, long *d, short N,
+void predict(int *x, int *d, short N,
 			 rlslms_buf_ptr *rlslms_ptr,
 			 short ch, short RA, short mode)
 {
@@ -666,8 +666,8 @@ void predict(long *x, long *d, short N,
 	P_TYPE *Pmatrix; 
 	short i,j, lambda, rls_order;
 	INT64 pow[MAX_STAGES]; 
-	long predictor[MAX_STAGES];
-	long temp;
+	int predictor[MAX_STAGES];
+	int temp;
 
 	w			= rlslms_ptr->weight[ch];
 	buf			= rlslms_ptr->pbuf[ch];
@@ -740,7 +740,7 @@ void predict(long *x, long *d, short N,
 //  the residual errors during encoding, while during decoding it
 // overwrite them with the orignal samples.
 /***********************************************************************/  
-void predict_joint(long *x_left, long *x_right, short N, 
+void predict_joint(int *x_left, int *x_right, short N, 
 				   rlslms_buf_ptr *rlslms_ptr, short RA, short mode)
 {
 	BUF_TYPE **buf;
@@ -748,8 +748,8 @@ void predict_joint(long *x_left, long *x_right, short N,
 	P_TYPE **Pmatrix; 
 	short i, j, k, lambda, ch, rls_order;
 	INT64 pow[2][MAX_STAGES];
-	long predictor[MAX_STAGES],temp;
-	long *ch_ptr[2];
+	int predictor[MAX_STAGES],temp;
+	int *ch_ptr[2];
 
 	w			= rlslms_ptr->weight;
 	buf			= rlslms_ptr->pbuf;
@@ -851,7 +851,7 @@ short lookup_table(short *table, short value)
 // Check if all samples in *x and *y  have the same value, if 
 // the difference is more than a threshold, return the threshold
 /*******************************************************************/ 
-long Left_equal_Right(long *x, long *y, long *z, short N)
+long Left_equal_Right(int *x, int *y, int *z, short N)
 {
 	short n;
 	long c, energy;
@@ -877,12 +877,12 @@ long Left_equal_Right(long *x, long *y, long *z, short N)
 // It accept a block of data x with length N and compute the residual
 // error using DPCM+mono RLS+LMS predictor
 /*******************************************************************/ 
-void analyze(long *x, short N,  rlslms_buf_ptr *rlslms_ptr, 
+void analyze(int *x, short N,  rlslms_buf_ptr *rlslms_ptr, 
 			 short RA, MCC_ENC_BUFFER *mccbuf)
 {
 	char *xpr0;
 	short i, ch;
-	long d[8192];
+	int d[8192];
 
 	ch = rlslms_ptr->channel;
 	if (RA) { predict_init(rlslms_ptr);} // random access
@@ -905,12 +905,12 @@ void analyze(long *x, short N,  rlslms_buf_ptr *rlslms_ptr,
 // It accept a block of residual error x with length N and reconstruct
 // the orignal samples using using DPCM+mono RLS+LMS predictor
 /*******************************************************************/ 
-void synthesize(long *x, short N, rlslms_buf_ptr *rlslms_ptr, 
+void synthesize(int *x, short N, rlslms_buf_ptr *rlslms_ptr, 
 				short RA, MCC_DEC_BUFFER *mccbuf)
 {
 	char *xpr0;
 	short i,ch;
-	long d[8192];
+	int d[8192];
 	if (RA) { predict_init(rlslms_ptr);} // random access
 	ch = rlslms_ptr->channel;
 	xpr0 = &mccbuf->m_xpara[ch];
@@ -925,14 +925,14 @@ void synthesize(long *x, short N, rlslms_buf_ptr *rlslms_ptr,
 // the two block of residual errors using DPCM+Joints stereo RLS+LMS 
 // predictor
 /*******************************************************************/ 
-void analyze_joint(long *x0, long *x1, short N, rlslms_buf_ptr *rlslms_ptr,
+void analyze_joint(int *x0, int *x1, short N, rlslms_buf_ptr *rlslms_ptr,
 				   short RA, short *mono_frame, 
 				   MCC_ENC_BUFFER *mccbuf)
 {
 	char *xpr0, *xpr1;
 	short i,ch;
 	static short old_flag=0;
-	long x2[8192],d[8192];
+	int x2[8192],d[8192];
 	ch = rlslms_ptr->channel;
 	xpr0 = &mccbuf->m_xpara[ch];
 	xpr1 = &mccbuf->m_xpara[ch+1];
@@ -1005,10 +1005,10 @@ void analyze_joint(long *x0, long *x1, short N, rlslms_buf_ptr *rlslms_ptr,
 // reconstruct the orignal samples using DPCM+Joints stereo RLS+LMS 
 // predictors
 /*******************************************************************/ 
-void synthesize_joint(long *x0, long *x1, short N, rlslms_buf_ptr *rlslms_ptr,
+void synthesize_joint(int *x0, int *x1, short N, rlslms_buf_ptr *rlslms_ptr,
 					  short RA, short mono_frame, MCC_DEC_BUFFER *mccbuf)
 {
-	long d[8192];
+	int d[8192];
 	char *xpr0,*xpr1;
 	short i,ch;
 	static short old_flag=0;

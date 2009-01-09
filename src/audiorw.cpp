@@ -53,6 +53,9 @@ contents : Audio data I/O
  *   - modified ReadFloatNM() to set values to float buffer
  *     in form of unsigned long.
  *
+ * 05/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - replaced FILE* with HALSSTREAM.
+ *
  *************************************************************************/
 
 // I/O of PCM audio data
@@ -78,8 +81,9 @@ contents : Audio data I/O
 #include <stdio.h>
 #include <math.h>
 #include "floating.h"
+#include "stream.h"
 
-long Read8BitOffsetNM(long **x, long M, long N, unsigned char *b, FILE *fp)
+long Read8BitOffsetNM(int **x, long M, long N, unsigned char *b, HALSSTREAM fp)
 {
 	unsigned char *bt;
 	long n, m;
@@ -91,7 +95,7 @@ long Read8BitOffsetNM(long **x, long M, long N, unsigned char *b, FILE *fp)
 	for (n = 0; n < N; n++)
 	{
 		for (m = 0; m < M; m++)
-			x[m][n] = long(bt[m]) - 128;
+			x[m][n] = int(bt[m]) - 128;
 		
 		bt += M;
 	}
@@ -99,7 +103,7 @@ long Read8BitOffsetNM(long **x, long M, long N, unsigned char *b, FILE *fp)
 	return(0);
 }
 
-long Write8BitOffsetNM(long **x, long M, long N, unsigned char *b, FILE *fp)
+long Write8BitOffsetNM(int **x, long M, long N, unsigned char *b, HALSSTREAM fp)
 {
 	unsigned char *bt;
 	long n, m;
@@ -120,7 +124,7 @@ long Write8BitOffsetNM(long **x, long M, long N, unsigned char *b, FILE *fp)
 		return(0);
 }
 
-long Read16BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp)
+long Read16BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp)
 {
 	short c0, c1;
 	long r, n, m;
@@ -141,7 +145,7 @@ long Read16BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FIL
 	for (n = 0; n < N; n++)
 	{
 		for (m = 0; m < M; m++)
-			x[m][n] = short(b[2*m+c0] | (b[2*m+c1] << 8));
+			x[m][n] = short(b[2*m+c0] | (static_cast<unsigned short>(b[2*m+c1]) << 8));
 
 		b += 2 * M;
 	}
@@ -149,7 +153,7 @@ long Read16BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FIL
 	return(r);
 }
 
-long Write16BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp)
+long Write16BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp)
 {
 	unsigned char *bt;
 	short c0, c1;
@@ -186,7 +190,7 @@ long Write16BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FI
 
 }
 
-long Read24BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp)
+long Read24BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp)
 {
 	short c0, c1, c2;
 	long r, n, m;
@@ -210,7 +214,7 @@ long Read24BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FIL
 	{
 		for (m = 0; m < M; m++)
 		{
-			x[m][n] = b[3*m+c0] | (b[3*m+c1] << 8) | (b[3*m+c2] << 16);
+			x[m][n] = b[3*m+c0] | (static_cast<unsigned int>(b[3*m+c1]) << 8) | (static_cast<unsigned int>(b[3*m+c2]) << 16);
 			if (x[m][n] & 0x00800000)
 				x[m][n] = (x[m][n] | 0xFF000000);
 		}
@@ -221,7 +225,7 @@ long Read24BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FIL
 	return(r);
 }
 
-long Write24BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp)
+long Write24BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp)
 {
 	unsigned char *bt;
 	short c0, c1, c2;
@@ -260,7 +264,7 @@ long Write24BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FI
 		return(0);
 }
 
-long Read32BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp)
+long Read32BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp)
 {
 	short c0, c1, c2, c3;
 	long r, n, m;
@@ -285,7 +289,7 @@ long Read32BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FIL
 	for (n = 0; n < N; n++)
 	{
 		for (m = 0; m < M; m++)
-			x[m][n] = b[4*m+c0] | (b[4*m+c1] << 8) | (b[4*m+c2] << 16) | (b[4*m+c3] << 24);
+			x[m][n] = b[4*m+c0] | (static_cast<unsigned int>(b[4*m+c1]) << 8) | (static_cast<unsigned int>(b[4*m+c2]) << 16) | (static_cast<unsigned int>(b[4*m+c3]) << 24);
 
 		b += 4 * M;
 	}
@@ -293,7 +297,7 @@ long Read32BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FIL
 	return(r);
 }
 
-long Write32BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp)
+long Write32BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp)
 {
 	unsigned char *bt;
 	short c0, c1, c2, c3;
@@ -335,7 +339,7 @@ long Write32BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FI
 		return(0);
 }
 
-long	ReadFloatNM( long** ppLongBuf, long M, long N, short msbfirst, unsigned char* b, FILE* fp, float** ppFloatBuf )
+long	ReadFloatNM( int** ppLongBuf, long M, long N, short msbfirst, unsigned char* b, HALSSTREAM fp, float** ppFloatBuf )
 {
 	long	iSample, iChannel;
 	unsigned long	ul;
@@ -362,9 +366,9 @@ long	ReadFloatNM( long** ppLongBuf, long M, long N, short msbfirst, unsigned cha
 	// Convert raw data to long/float array
 	for( iSample=0; iSample<N; iSample++ ) {
 		for( iChannel=0; iChannel<M; iChannel++ ) {
-			ul = b[4*iChannel+c0] | ( b[4*iChannel+c1] << 8 ) | ( b[4*iChannel+c2] << 16 ) | ( b[4*iChannel+c3] << 24 );
-			// ul shold be copied as unsigned long. (it may lost some bits when copied as float.)
-			*reinterpret_cast<unsigned long*>( &ppFloatBuf[iChannel][iSample] ) = ul;
+			ul = b[4*iChannel+c0] | ( static_cast<unsigned int>(b[4*iChannel+c1]) << 8 ) | ( static_cast<unsigned int>(b[4*iChannel+c2]) << 16 ) | ( static_cast<unsigned int>(b[4*iChannel+c3]) << 24 );
+			// ul shold be copied as unsigned int. (it may lost some bits when copied as float.)
+			*reinterpret_cast<unsigned int*>( &ppFloatBuf[iChannel][iSample] ) = ul;
 		}
 		b += sizeof(float) * M;
 	}

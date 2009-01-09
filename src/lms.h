@@ -46,7 +46,7 @@ contents : Header file for lms.h
 
 #ifndef LMS_DEFINE
 #define LMS_DEFINE
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 	typedef __int64 INT64;
 	typedef unsigned __int64 UINT64;
 	#define JS_INIT_P 115292150460684 
@@ -58,7 +58,7 @@ contents : Header file for lms.h
 	#define JS_INIT_P 115292150460684LL 
 #endif
 
-#define ROUND1(x)  ((long)(x+8)>>4) 
+#define ROUND1(x)  ((int)(x+8)>>4) 
 #define ROUND2(x)  ((INT64) ( (INT64) x + (INT64) 1 )>>1)
 #define ENCODE 0
 #define DECODE 1
@@ -79,15 +79,15 @@ contents : Header file for lms.h
 #define FRACTION (1L <<24)
 
 #define RA_TRANS N/32
-typedef long BUF_TYPE;
-typedef long W_TYPE;
+typedef int BUF_TYPE;
+typedef int W_TYPE;
 typedef INT64 P_TYPE;
 struct mtable{
 			short nstage;
 			short filter_len[MAX_STAGES];
 			short opt_mu[MAX_STAGES];
 			short lambda[2];
-			long step_size;
+			int step_size;
 };
 
 struct rlslms_buf_ptr {
@@ -97,17 +97,17 @@ struct rlslms_buf_ptr {
     short channel; // which channel is currently processing		
 };
 
-void analyze(long *x, short N,  rlslms_buf_ptr *rlslms_ptr, short RA, MCC_ENC_BUFFER *mccbuf);
-void synthesize(long *x, short N,  rlslms_buf_ptr *rlslms_ptr, short RA, MCC_DEC_BUFFER *mccbuf);
-void analyze_joint(long *x0, long *x1, short N,  rlslms_buf_ptr *rlslms_ptr, short RA, short *mono, MCC_ENC_BUFFER *mccbuf);
-void synthesize_joint(long *x0, long *x1, short N, rlslms_buf_ptr *rlslms_ptr, short RA, short mono, MCC_DEC_BUFFER *mccbuf);
+void analyze(int *x, short N,  rlslms_buf_ptr *rlslms_ptr, short RA, MCC_ENC_BUFFER *mccbuf);
+void synthesize(int *x, short N,  rlslms_buf_ptr *rlslms_ptr, short RA, MCC_DEC_BUFFER *mccbuf);
+void analyze_joint(int *x0, int *x1, short N,  rlslms_buf_ptr *rlslms_ptr, short RA, short *mono, MCC_ENC_BUFFER *mccbuf);
+void synthesize_joint(int *x0, int *x1, short N, rlslms_buf_ptr *rlslms_ptr, short RA, short mono, MCC_DEC_BUFFER *mccbuf);
 void predict_init(rlslms_buf_ptr *ptr);
 void initCoefTable(short mode, unsigned char CoefTable);
 
 
-extern short BlockIsZero(long *x, long N);
-extern long BlockIsConstant(long *x, long N);
-extern short ShiftOutEmptyLSBs(long *x, long N);
+extern short BlockIsZero(int *x, long N);
+extern int BlockIsConstant(int *x, long N);
+extern short ShiftOutEmptyLSBs(int *x, long N);
 extern short lookup_mu(short mu);
 extern short lookup_table(short *,short mu);
 

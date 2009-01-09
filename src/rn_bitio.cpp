@@ -70,7 +70,7 @@
  *
  *************************************************************************/
 
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 	typedef unsigned __int64 UINT64;
 #else
 	#include <stdint.h>
@@ -335,7 +335,7 @@ int rice_decode (int s, BITIO *p)
  * Encodes a block of symbols using Golomb-Rice code with parameter s.
  * Returns # of bits written.
  */
-int rice_encode_block (long *block, int s, int N, BITIO *p)
+int rice_encode_block (int *block, int s, int N, BITIO *p)
 {
     /* save start position: */
     unsigned char *start_pbs = p->pbs;
@@ -355,7 +355,7 @@ int rice_encode_block (long *block, int s, int N, BITIO *p)
  * Decodes a block of symbols encoded using Golomb-Rice code with parameter s.
  * Returns # of bits read.
  */
-int rice_decode_block (long *block, int s, int N, BITIO *p)
+int rice_decode_block (int *block, int s, int N, BITIO *p)
 {
     /* save start position: */
     unsigned char *start_pbs = p->pbs;
@@ -640,7 +640,7 @@ static int tail_code[16][6] = {
 /*
  * BGMC encoding of multiple subblocks in a block:
  */
-int bgmc_encode_blocks (long *blocks, int start, short *s, short *sx, int NN, int sub, BITIO *p)
+int bgmc_encode_blocks (int *blocks, int start, short *s, short *sx, int NN, int sub, BITIO *p)
 {
     /* start position: */
     unsigned char *start_pbs = p->pbs;
@@ -649,7 +649,7 @@ int bgmc_encode_blocks (long *blocks, int start, short *s, short *sx, int NN, in
     /* other variables: */
     int N[8], k[8], delta[8], max_x[8];
     register int i, j, b, x;
-    register long *block;
+    register int *block;
 
     /* check parameters: */
     /*assert(p != 0);
@@ -762,7 +762,7 @@ int bgmc_encode_blocks (long *blocks, int start, short *s, short *sx, int NN, in
 /*
  * BGMC decoding of multiple subblocks in a block:
  */
-int bgmc_decode_blocks (long *blocks, int start, short *s, short *sx, int NN, int sub, BITIO *p)
+int bgmc_decode_blocks (int *blocks, int start, short *s, short *sx, int NN, int sub, BITIO *p)
 {
     /* save start position: */
     unsigned char *start_pbs = p->pbs;
@@ -771,7 +771,7 @@ int bgmc_decode_blocks (long *blocks, int start, short *s, short *sx, int NN, in
     /* other variables: */
     int N[8], k[8], delta[8], max_x[8];
     register int i, j, b, x;
-    register long *block;
+    register int *block;
 
     /* check parameters: */
     /*assert(p != 0);

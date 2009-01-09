@@ -52,6 +52,9 @@ contents : Command line parsing
  *   - modified GetOptionValue() and GetOptionValues to support longer
  *     option names.
  *
+ * 11/28/2008, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - added the "const" keyword to fix some compiler warnings
+ *
  *************************************************************************/
 
 #include <string.h>
@@ -60,7 +63,7 @@ contents : Command line parsing
 
 // Search for arbitrary option
 // Returns 1 if option is set, otherwise 0
-short CheckOption(short argc, char **argv, char *opt)
+short CheckOption(short argc, char **argv, const char *opt)
 {
 	short i;
 
@@ -79,7 +82,7 @@ short CheckOption(short argc, char **argv, char *opt)
 // Get value of an arbitrary option
 // Returns value, e.g. 3 if option is "-a3"
 // Returns 0 if option is set but has no value (e.g. "-a")
-long GetOptionValue(short argc, char **argv, char *opt, long default_value = 0)
+long GetOptionValue(short argc, char **argv, const char *opt, long default_value = 0)
 {
 	short i;
 	size_t	OptLen = strlen( opt );
@@ -100,7 +103,7 @@ long GetOptionValue(short argc, char **argv, char *opt, long default_value = 0)
 // Returns number of values read (exception: N < 1 returns -1 if option is set)
 // The values have to be separated by commas, they are returned in val[0..N-1]
 // (make sure that memory for val has been allocated)
-long GetOptionValues(short argc, char **argv, char *opt, long N, unsigned short *val)
+long GetOptionValues(short argc, char **argv, const char *opt, long N, unsigned short *val)
 {
 	short i, n;
 	char *str, *pos;

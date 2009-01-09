@@ -60,6 +60,9 @@ contents : Floating-point PCM support
  * 10/08/2005, Noboru Harada <n-harada@theory.brl.ntt.co.jp>
  *   - fixed an endian related bug.
  *
+ * 05/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - replaced FILE* with HALSSTREAM.
+ *
  ************************************************************************/
 
 #ifndef	FLOATING_INCLUDED
@@ -68,8 +71,9 @@ contents : Floating-point PCM support
 #include	<cstdio>
 #include	"bitio.h"
 #include	"mlz.h"
+#include	"stream.h"
 
-#ifndef	WIN32
+#if !defined(WIN32) && !defined(WIN64)
 #include	<stdint.h>
 #endif
 
@@ -93,7 +97,7 @@ class	CIEEE32 {
 
 protected:
 	// Type definition of 64-bit integer
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 	typedef	__int64				INT64;
 	typedef	unsigned __int64	UINT64;
 #else
@@ -104,11 +108,11 @@ protected:
 public:
 	CIEEE32( void ) : m_sign( 0 ), m_exp( 0 ), m_mantissa( 0 ), m_floatnum( 0.f ) {}
 	CIEEE32( float Value ) { Set( Value ); }
-	CIEEE32( unsigned char sign, int exp, unsigned long mantissa ) { Set( sign, exp, mantissa ); }
+	CIEEE32( unsigned char sign, int exp, unsigned int mantissa ) { Set( sign, exp, mantissa ); }
 	operator float ( void ) const { return m_floatnum; }
 	void	Set( float Value );
-	void	Set( unsigned long Value );
-	void	Set( unsigned char sign, int exp, unsigned long mantissa );
+	void	Set( unsigned int Value );
+	void	Set( unsigned char sign, int exp, unsigned int mantissa );
 	bool	Set( const unsigned char* cpInput, bool MSBFirst = false );
 	void	Store( unsigned char* cpOutput, bool MSBFirst = false ) const;
 
@@ -121,7 +125,7 @@ public:
 public:
 	unsigned char	m_sign;			// 1 bit
 	int				m_exp;			// -127 <= m_exp <= 128
-	unsigned long	m_mantissa;		// 24 bits (including the first implicite bit)
+	unsigned int	m_mantissa;		// 24 bits (including the first implicite bit)
     float			m_floatnum;		// float value
 };
 
@@ -136,7 +140,7 @@ class	CFloat {
 
 protected:
 	// Type definition of 64-bit integer
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 	typedef	__int64				INT64;
 	typedef	unsigned __int64	UINT64;
 #else
@@ -155,8 +159,8 @@ private:
 	} FLOAT_EXP;
 	
 	typedef	struct tagCONVERGENCE_RES {
-		long	m_dn;
-		long	m_idx;
+		int	m_dn;
+		int	m_idx;
 	} CONVERGENCE_RES;
 	
 	typedef	struct tagCDNS_COUNT {
@@ -166,7 +170,7 @@ private:
 	
 	// Constants
 	static	const int			NUM_ACF_MAX;
-	static	const unsigned long	MANTISSA_MAX;
+	static	const unsigned int	MANTISSA_MAX;
 	static	const int			CONVERGENT_LEN;
 	static	const int			X_CANDIDATES;
 	static	const int			TRY_MAX;
@@ -189,15 +193,15 @@ public:
 
 	// Encoding functions
 	int		SearchShift( float* pInX, float* pInY, float acf, int lastShift, int FrameSize, int* pMode, int shiftMode );
-	void	ConvertFloatToInteger( long** ppLongBuf, int FrameSize, bool RandomAccess, short AcfMode, float AcfGain, short MlzMode);
-	bool	FindDiffFloatPCM( long** ppLongBuf, long FrameSize );
-	bool	DiffIEEE32num( unsigned char* cpOutput, const CIEEE32& FNum1, const CIEEE32& FNum2, unsigned long* pDiffMantissa );
+	void	ConvertFloatToInteger( int** ppIntBuf, int FrameSize, bool RandomAccess, short AcfMode, float AcfGain, short MlzMode);
+	bool	FindDiffFloatPCM( int** ppIntBuf, long FrameSize );
+	bool	DiffIEEE32num( unsigned char* cpOutput, const CIEEE32& FNum1, const CIEEE32& FNum2, unsigned int* pDiffMantissa );
 	unsigned long	EncodeDiff( long FrameSize, bool RandomAccess, short MlzMode );
 
 	// Decoding functions
 	void	ConvertFloatToRBuff( unsigned char* pRawBuf, long FrameSize );
-	void	ReformatData( long const* const* ppLongBuf, long FrameSize );
-	bool	DecodeDiff( FILE* fp, long FrameSize, bool RandomAccess );
+	void	ReformatData( int const* const* ppIntBuf, long FrameSize );
+	bool	DecodeDiff( HALSSTREAM fp, long FrameSize, bool RandomAccess );
 	bool	AddIEEEDiff( long FrameSize );
 
 protected:
@@ -205,23 +209,23 @@ protected:
 	int		EstimateMultiplier( const float* x, long FrameSize, float* agcd, int max_agcd_num );
 
 	// Static functions
-	static	int				CountZeros( unsigned long mantissa );
+	static	int				CountZeros( unsigned int mantissa );
 	static	int				ilog2( unsigned int x );
 	static	long			CheckZneZ( const float* pIn, float* pOut, float acf, long num );
 	static	int				Check( const float* pIn, float* pOut, float acf, long num );
 	static	void			SearchUpward( float Target, float& x1, float& y1, const CIEEE32& facf );
 	static	void			SearchDownward( float Target, float& x1, float& y1, const CIEEE32& facf );
-	static	void			Convergent( long a, long b, long nm_end, long dn_end, CONVERGENT_FLAG flag, long* nm_med, long* dn_med );
-	static	void			Red( unsigned long* a, unsigned long* b );
-	static	unsigned long	Gcd( unsigned long a, unsigned long b );
-	static	long			Det( unsigned long a, unsigned long b, unsigned long c, unsigned long d );
+	static	void			Convergent( int a, int b, int nm_end, int dn_end, CONVERGENT_FLAG flag, int* nm_med, int* dn_med );
+	static	void			Red( unsigned int* a, unsigned int* b );
+	static	unsigned int	Gcd( unsigned int a, unsigned int b );
+	static	int			Det( unsigned int a, unsigned int b, unsigned int c, unsigned int d );
 
 	// Compare functions for sorting
 	static	int		CompareFloat( const void* elem1, const void* elem2 );
 	static	int		CompareUL( const void* elem1, const void* elem2 );
 	static	int		CompareDN( const void* elem1, const void* elem2 );
 	static	void	BucketSortExp( int range, int max_mag_exp, int length, FLOAT_EXP* x );
-	static	void	InsertDNSCount( CDNS_COUNT* dns_count_large, int size, const long* dns_count, int dns_idx );
+	static	void	InsertDNSCount( CDNS_COUNT* dns_count_large, int size, const int* dns_count, int dns_idx );
 
 protected:
 	int				m_IntRes;				// Resolution of integer PCM
@@ -231,7 +235,7 @@ protected:
 	unsigned char*	m_pShiftBit;			// Shiftbit buffer
 	unsigned char*	m_pLastShiftBit;		// Last shiftbit buffer
 	CIEEE32**		m_ppIEEE32numPCM;		// CIEEE32 object buffer
-	unsigned long**	m_ppDiffMantissa;		// Mantissa differance buffer
+	unsigned int**	m_ppDiffMantissa;		// Mantissa differance buffer
 	unsigned char**	m_ppCBuffD;				// Temporary buffer
 	unsigned char*	m_pCbitBuff;			// Bit stream buffer
 	CBitIO			m_BitIO;				// Bit I/O stream object

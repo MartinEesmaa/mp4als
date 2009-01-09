@@ -1,45 +1,53 @@
-/******************* MPEG-4 Audio Lossless Coding ******************
- ******************* MPEG-A Audio Archival MAF    ******************
+/***************** MPEG-4 Audio Lossless Coding *********************
 
 This software module was originally developed by
 
 NTT (Nippon Telegraph and Telephone Corporation), Japan
 
-in the course of development of the MPEG-4 Audio standard ISO/IEC 
-14496-3, associated amendments and the ISO/IEC 23000-6: Audio 
-Archival Multimedia Application Format standard.
-This software module is an implementation of a part of one or more 
-MPEG-4 Audio lossless coding tools as specified by the MPEG-4 Audio 
-standard and ISO/IEC 23000-6: Audio Archival Multimedia Application 
-Format tools  as specified by the MPEG-A Requirements.
-ISO/IEC gives users of the MPEG-4 Audio standards and of ISO/IEC 
-23000-6: Audio Archival Multimedia Application Format free license 
-to this software module or modifications thereof for use in hardware 
-or software products claiming conformance to MPEG-4 Audio and MPEG-A.
-Those intending to use this software module in hardware or software 
-products are advised that its use may infringe existing patents. 
-The original developer of this software module and his/her company, 
-the subsequent editors and their companies, and ISO/IEC have no 
-liability for use of this software module or modifications thereof 
-in an implementation.
-Copyright is not released for non MPEG-4 / MPEG-A conforming 
-products. The organizations named above retain full rights to use 
-the code for their own purpose, assign or donate the code to a third 
-party and inhibit third parties from using the code for non MPEG-4 / 
-MPEG-A conforming products.
+in the course of development of the MPEG-4 Audio standard ISO/IEC 14496-3
+and associated amendments. This software module is an implementation of
+a part of one or more MPEG-4 Audio lossless coding tools as specified
+by the MPEG-4 Audio standard. ISO/IEC gives users of the MPEG-4 Audio
+standards free license to this software module or modifications
+thereof for use in hardware or software products claiming conformance
+to the MPEG-4 Audio standards. Those intending to use this software
+module in hardware or software products are advised that this use may
+infringe existing patents. The original developer of this software
+module, the subsequent editors and their companies, and ISO/IEC have
+no liability for use of this software module or modifications thereof
+in an implementation. Copyright is not released for non MPEG-4 Audio
+conforming products. The original developer retains full right to use
+the code for the developer's own purpose, assign or donate the code to
+a third party and to inhibit third party from using the code for non
+MPEG-4 Audio conforming products. This copyright notice must be included
+in all copies or derivative works.
 
 Copyright (c) 2006.
 
-This notice must be included in all copies or derivative works.
-
 Filename : ImfBox.cpp
-Project  : MPEG-A Audio Archival Multimedia Application Format
+Project  : MPEG-4 Audio Lossless Coding
 Author   : Koichi Sugiura (NTT Advanced Technology Corporation)
            Noboru Harada  (NTT)
 Date     : August 31st, 2006
 Contents : Box classes defined in ISO/IEC 14496-12
 
 *******************************************************************/
+
+/************************** Modifications *************************
+ *
+ * 2007/05/10 by Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - integrated ImfBoxAmd1.cpp.
+ *   - supported pitm box.
+ *   - updated infe box.
+ *
+ * 2007/05/23, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added Print() to every class.
+ *   - changed indent value type in Out() and Dump().
+ *
+ * 2008/10/20, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added CContainerFullBox class.
+ *
+ ******************************************************************/
 
 #include	<iostream>
 #include	<iomanip>
@@ -229,6 +237,34 @@ CBox*	CBoxReader::CreateBox( IMF_UINT32 Type )
 	case	IMF_FOURCC_MFRA:	p = new CMovieFragmentRandomAccessBox();			break;
 //	case	IMF_FOURCC_TFRA:	p = new CTrackFragmentRandomAccessBox();			break;
 //	case	IMF_FOURCC_MFRO:	p = new CMovieFragmentRandomAccessOffsetBox();		break;
+//	case	IMF_FOURCC_PDIN:	p = new CProgressiveDownloadInfoBox();				break;
+//	case	IMF_FOURCC_SDTP:	p = new CSampleDependencyTypeBox();					break;
+//	case	IMF_FOURCC_SBGP:	p = new CSampleToGroupBox();						break;
+//	case	IMF_FOURCC_SGPD:	p = new CSampleGroupDescriptionBox();				break;
+//	case	IMF_FOURCC_SUBS:	p = new CSubSampleInformationBox();					break;
+//	case	IMF_FOURCC_IPMC:	p = new CIPMPControlBox();							break;
+	case	IMF_FOURCC_META:	p = new CMetaBox();									break;
+	case	IMF_FOURCC_ILOC:	p = new CItemLocationBox();							break;
+//	case	IMF_FOURCC_IPRO:	p = new CItemProtectionBox();						break;
+//	case	IMF_FOURCC_SINF:	p = new CProtectionSchemeInfoBox();					break;
+//	case	IMF_FOURCC_FRMA:	p = new COriginalFormatBox();						break;
+//	case	IMF_FOURCC_IMIF:	p = new CIPMPInfoBox();								break;
+//	case	IMF_FOURCC_SCHM:	p = new CSchemeTypeBox();							break;
+//	case	IMF_FOURCC_SCHI:	p = new CSchemeInformationBox();					break;
+	case	IMF_FOURCC_IINF:	p = new CItemInfoBox();								break;
+	case	IMF_FOURCC_INFE:	p = new CItemInfoEntry( 0 );						break;
+	case	IMF_FOURCC_XML:		p = new CXMLBox();									break;
+	case	IMF_FOURCC_BXML:	p = new CBinaryXMLBox();							break;
+	case	IMF_FOURCC_PITM:	p = new CPrimaryItemBox();							break;
+//	case	IMF_FOURCC_MECO:	p = new CAdditionalMetadataContainerBox();			break;
+//	case	IMF_FOURCC_MERE:	p = new CMetaboxRelationBox();						break;
+//	case	IMF_FOURCC_FIIN:	p = new CFDItemInformationBox();					break;
+//	case	IMF_FOURCC_PAEN:	p = new CPartitionEntry();							break;
+//	case	IMF_FOURCC_FPAR:	p = new CFilePartition();							break;
+//	case	IMF_FOURCC_FECR:	p = new CFECReservoirBox();							break;
+//	case	IMF_FOURCC_SEGR:	p = new CFDSessionGroupBox();						break;
+//	case	IMF_FOURCC_GITN:	p = new CGroupIdToNameBox();						break;
+//	case	IMF_FOURCC_TSEL:	p = new CTrackSelectionBox();						break;
 	}
 	return p;
 }
@@ -469,10 +505,10 @@ bool	CBox::FindBox( IMF_UINT32 Type, CBox*& pLast )
 ////////////////////////////////////////
 // Stream = Output stream
 // Indent = Indent count
-void	CBox::Out( ostream& Stream, int Indent ) const
+void	CBox::Out( ostream& Stream, IMF_UINT16 Indent ) const
 {
-	char	Buf[5];
-	int		i;
+	char		Buf[5];
+	IMF_UINT16	i;
 
 	// Make indent.
 	for( i=0; i<Indent; i++ ) Stream << ' ';
@@ -511,15 +547,42 @@ void	CBox::Out( ostream& Stream, int Indent ) const
 
 ////////////////////////////////////////
 //                                    //
+//         Print box details          //
+//                                    //
+////////////////////////////////////////
+// Stream = Output stream
+// Indent = Indent count
+// MaxLen = Maximum string length per line
+void	CBox::Print( CPrintStream& Stream ) const
+{
+	char		Buf[7];
+
+	// Show box type.
+	Buf[0] = '[';
+	Buf[1] = static_cast<char>( m_type >> 24 );
+	Buf[2] = static_cast<char>( m_type >> 16 );
+	Buf[3] = static_cast<char>( m_type >>  8 );
+	Buf[4] = static_cast<char>( m_type );
+	Buf[5] = ']';
+	Buf[6] = '\0';
+	Stream << Buf << endl;
+
+	// Show parameters
+	if ( m_size == 1 ) Stream << "largesize = " << m_largesize << endl;
+	else Stream << "size = " << m_size << endl;
+}
+
+////////////////////////////////////////
+//                                    //
 //         Dump box contents          //
 //                                    //
 ////////////////////////////////////////
 // Stream = Output stream
 // Indent = Indent count
 // MaxLen = Maximum byte count to dump
-void	CBox::Dump( ostream& Stream, int Indent, IMF_UINT64 MaxLen ) const
+void	CBox::Dump( ostream& Stream, IMF_UINT16 Indent, IMF_UINT64 MaxLen ) const
 {
-	int			i;
+	IMF_UINT16	i;
 	IMF_UINT64	Size;
 
 	// Show box information.
@@ -791,6 +854,81 @@ bool	CContainerBox::Write( CBaseStream& Stream ) const
 ////////////////////////////////////////
 // Return value = Whole box size in bytes (-1 means error)
 IMF_INT64	CContainerBox::CalcSize( void )
+{
+	IMF_INT64	BoxSize;
+	IMF_INT64	WholeSize = 0;
+	CBoxVector::iterator	i;
+
+	for( i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) {
+		BoxSize = (*i)->CalcSize();
+		if ( BoxSize < 0 ) { SetLastError( E_BOX_SIZE ); return -1; }
+		WholeSize += BoxSize;
+		if ( WholeSize < 0 ) { SetLastError( E_BOX_SIZE ); return -1; }
+	}
+	return SetDataSize( WholeSize );
+}
+
+//////////////////////////////////////////////////////////////////////
+//                                                                  //
+//                     CContainerFullBox class                      //
+//                                                                  //
+//////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////
+//                                    //
+//                Read                //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// Return value = true:Success / false:Error
+bool	CContainerFullBox::Read( CBaseStream& Stream )
+{
+	CBox*		pChild = NULL;
+	IMF_INT8	ReadStatus;
+
+	// Read basic fields.
+	if ( !CFullBox::Read( Stream ) ) return false;
+
+	// Clear child boxes.
+	m_Boxes.Clear();
+
+	// Read child boxes.
+	while( ( ReadStatus = CheckReadSize( Stream ) ) < 0 ) {
+		// Read a child box.
+		pChild = m_pReader->Read( Stream, this );
+		if ( pChild == NULL ) { SetLastError( m_pReader->GetLastError() ); return false; }
+		m_Boxes.push_back( pChild );
+	}
+	if ( ReadStatus != 0 ) { SetLastError( E_BOX_SIZE ); return false; }
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//               Write                //
+//                                    //
+////////////////////////////////////////
+// Stream = Output stream
+// Return value = true:Success / false:Error
+bool	CContainerFullBox::Write( CBaseStream& Stream ) const
+{
+	CBoxVector::const_iterator	i;
+
+	// Write basic fields.
+	if ( !CFullBox::Write( Stream ) ) return false;
+
+	// Write child boxes.
+	for( i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) if ( !(*i)->Write( Stream ) ) return false;
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//         Calculate box size         //
+//                                    //
+////////////////////////////////////////
+// Return value = Whole box size in bytes (-1 means error)
+IMF_INT64	CContainerFullBox::CalcSize( void )
 {
 	IMF_INT64	BoxSize;
 	IMF_INT64	WholeSize = 0;
@@ -1812,6 +1950,23 @@ void	CSampleDescriptionBox::Clear( void )
 	m_Entries.clear();
 }
 
+////////////////////////////////////////
+//                                    //
+//               Print                //
+//                                    //
+////////////////////////////////////////
+void	CSampleDescriptionBox::Print( CPrintStream& Stream ) const
+{
+	IMF_UINT32	n = 0;
+	CFullBox::Print( Stream );
+	for( vector<CSampleEntry*>::const_iterator i=m_Entries.begin(); i!=m_Entries.end(); i++ ) {
+		Stream << "entry[" << n << "]" << endl;
+		Stream.Indent( 1 );
+		(*i)->Print( Stream );
+		Stream.Indent( -1 );
+	}
+}
+
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
 //                   CSampleSizeBox class (stsz)                    //
@@ -2247,6 +2402,542 @@ bool	CChunkLargeOffsetBox::Write( CBaseStream& Stream ) const
 
 	if ( !Stream.Write32( static_cast<IMF_UINT32>( m_chunk_offsets.size() ) ) ) return false;
 	for( i=m_chunk_offsets.begin(); i!=m_chunk_offsets.end(); i++ ) if ( !Stream.Write64( *i ) ) return false;
+	return true;
+}
+
+//////////////////////////////////////////////////////////////////////
+//                                                                  //
+//                  CItemLocationBox class (iloc)                   //
+//                                                                  //
+//////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////
+//                                    //
+//     Read variable length value     //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// Size = Value size (0 or 4 or 8)
+// Value = Variable to receive the read value
+// Return value = true:Success / false:Error
+bool	CItemLocationBox::ReadValue( CBaseStream& Stream, IMF_UINT8 Size, IMF_UINT64& Value )
+{
+	IMF_UINT32	Value32;
+	switch( Size ) {
+	case	0:
+		Value = 0;
+		return true;
+	case	4:
+		if ( !Stream.Read32( Value32 ) ) { SetLastError( E_READ_STREAM ); return false; }
+		Value = static_cast<IMF_UINT64>( Value32 );
+		return true;
+	case	8:
+		if ( !Stream.Read64( Value ) ) { SetLastError( E_READ_STREAM ); return false; }
+		return true;
+	}
+	SetLastError( E_ILOC_SIZE );
+	return false;
+}
+
+////////////////////////////////////////
+//                                    //
+//    Write variable length value     //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// Size = Value size (0 or 4 or 8)
+// Value = Value to write
+// Return value = true:Success / false:Error
+bool	CItemLocationBox::WriteValue( CBaseStream& Stream, IMF_UINT8 Size, IMF_UINT64 Value ) const
+{
+	switch( Size ) {
+	case	0:	return true;
+	case	4:	return Stream.Write32( static_cast<IMF_UINT32>( Value ) );
+	case	8:	return Stream.Write64( Value );
+	}
+	return false;
+}
+
+////////////////////////////////////////
+//                                    //
+//                Read                //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// Return value = true:Success / false:Error
+bool	CItemLocationBox::Read( CBaseStream& Stream )
+{
+	IMF_UINT16	Tmp, i, j, ItemCount, ExtentCount;
+	ILOC_EXTENT	Extent;
+	CItem		Item;
+
+	m_items.clear();
+
+	if ( !CFullBox::Read( Stream ) ) return false;
+
+	try {
+		if ( !Stream.Read16( Tmp ) ) throw E_READ_STREAM;
+		m_offset_size = static_cast<IMF_UINT8>( Tmp >> 12 ) & 0xf;
+		m_length_size = static_cast<IMF_UINT8>( Tmp >> 8 ) & 0xf;
+		m_base_offset_size = static_cast<IMF_UINT8>( Tmp >> 4 ) & 0xf;
+		if ( ( m_offset_size != 0 ) && ( m_offset_size != 4 ) && ( m_offset_size != 8 ) ) throw E_ILOC_OFFSET_SIZE;
+		if ( ( m_length_size != 0 ) && ( m_length_size != 4 ) && ( m_length_size != 8 ) ) throw E_ILOC_LENGTH_SIZE;
+		if ( ( m_base_offset_size != 0 ) && ( m_base_offset_size != 4 ) && ( m_base_offset_size != 8 ) ) throw E_ILOC_BASE_OFFSET_SIZE;
+		if ( !Stream.Read16( ItemCount ) ) throw E_READ_STREAM;
+
+		// Item loop.
+		for( i=0; i<ItemCount; i++ ) {
+			if ( !Stream.Read16( Item.m_item_ID ) || !Stream.Read16( Item.m_data_reference_index ) ) throw E_READ_STREAM;
+			if ( !ReadValue( Stream, m_base_offset_size, Item.m_base_offset ) ) return false;
+			if ( !Stream.Read16( ExtentCount ) ) throw E_READ_STREAM;
+			if ( ExtentCount < 1 ) throw E_ILOC_NO_EXTENT;
+			Item.m_extent_data.clear();
+			for( j=0; j<ExtentCount; j++ ) {
+				if ( !ReadValue( Stream, m_offset_size, Extent.m_extent_offset ) || 
+					 !ReadValue( Stream, m_length_size, Extent.m_extent_length ) ) return false;
+				Item.m_extent_data.push_back( Extent );
+			}
+			m_items.push_back( Item );
+		}
+		if ( CheckReadSize( Stream ) != 0 ) throw E_BOX_SIZE;
+	}
+	catch( IMF_UINT32 e ) {
+		SetLastError( e );
+		return false;
+	}
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//               Write                //
+//                                    //
+////////////////////////////////////////
+// Stream = Output stream
+// Return value = true:Success / false:Error
+bool	CItemLocationBox::Write( CBaseStream& Stream ) const
+{
+	IMF_UINT16	Tmp;
+	vector<CItem>::const_iterator		iItem;
+	vector<ILOC_EXTENT>::const_iterator	iExtent;
+
+	if ( !CFullBox::Write( Stream ) ) return false;
+	Tmp = ( ( static_cast<IMF_UINT16>( m_offset_size ) << 12 ) & 0xf000 ) |
+		  ( ( static_cast<IMF_UINT16>( m_length_size ) <<  8 ) & 0x0f00 ) |
+		  ( ( static_cast<IMF_UINT16>( m_base_offset_size ) << 4 ) & 0x00f0 );
+	if ( !Stream.Write16( Tmp ) ) return false;
+	// Write items.
+	if ( m_items.size() > 0xffff ) return false;
+	if ( !Stream.Write16( static_cast<IMF_UINT16>( m_items.size() ) ) ) return false;
+	for( iItem=m_items.begin(); iItem!=m_items.end(); iItem++ ) {
+		if ( !Stream.Write16( iItem->m_item_ID ) || 
+			 !Stream.Write16( iItem->m_data_reference_index ) || 
+			 !WriteValue( Stream, m_base_offset_size, iItem->m_base_offset ) ) return false;
+		// Write extent data.
+		if ( iItem->m_extent_data.size() > 0xffff ) return false;
+		if ( !Stream.Write16( static_cast<IMF_UINT16>( iItem->m_extent_data.size() ) ) ) return false;
+		for( iExtent=iItem->m_extent_data.begin(); iExtent!=iItem->m_extent_data.end(); iExtent++ ) {
+			if ( !WriteValue( Stream, m_offset_size, iExtent->m_extent_offset ) || 
+				 !WriteValue( Stream, m_length_size, iExtent->m_extent_length ) ) return false;
+		}
+	}
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//         Calculate box size         //
+//                                    //
+////////////////////////////////////////
+// Return value = Whole box size in bytes (-1 means error)
+IMF_INT64	CItemLocationBox::CalcSize( void )
+{
+	IMF_INT64	Size = 4;
+	vector<CItem>::const_iterator	iItem;
+
+	for( iItem=m_items.begin(); iItem!=m_items.end(); iItem++ ) {
+		Size += 6 + m_base_offset_size + iItem->m_extent_data.size() * ( m_offset_size + m_length_size );
+		if ( Size < 0 ) { SetLastError( E_BOX_SET_SIZE ); return -1; }
+	}
+	return SetDataSize( Size );
+}
+
+////////////////////////////////////////
+//                                    //
+//            Get an item             //
+//                                    //
+////////////////////////////////////////
+// ItemID = Item ID
+// Return value = Pointer to CItem object (NULL when not found)
+const CItemLocationBox::CItem*	CItemLocationBox::GetItem( IMF_UINT16 ItemID ) const
+{
+	vector<CItem>::const_iterator	i;
+	for( i=m_items.begin(); i!=m_items.end(); i++ ) if ( i->m_item_ID == ItemID ) return &*i;
+	return NULL;
+}
+
+//////////////////////////////////////////////////////////////////////
+//                                                                  //
+//                    CItemInfoBox class (iinf)                     //
+//                                                                  //
+//////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////
+//                                    //
+//                Read                //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// Return value = true:Success / false:Error
+bool	CItemInfoBox::Read( CBaseStream& Stream )
+{
+	CBox*		pChild = NULL;
+	IMF_UINT16	EntryCount, i;
+
+	if ( !CFullBox::Read( Stream ) ) return false;
+
+	try {
+		m_Boxes.Clear();
+		if ( !Stream.Read16( EntryCount ) ) throw E_READ_STREAM;
+		for( i=0; i<EntryCount; i++ ) {
+			pChild = m_pReader->Read( Stream, this );
+			if ( pChild == NULL ) throw m_pReader->GetLastError();
+			m_Boxes.push_back( pChild );
+		}
+		if ( CheckReadSize( Stream ) != 0 ) throw E_BOX_SIZE;
+	}
+	catch( IMF_UINT32 e ) {
+		SetLastError( e );
+		return false;
+	}
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//               Write                //
+//                                    //
+////////////////////////////////////////
+// Stream = Output stream
+// Return value = true:Success / false:Error
+bool	CItemInfoBox::Write( CBaseStream& Stream ) const
+{
+	CBoxVector::const_iterator	i;
+
+	if ( !CFullBox::Write( Stream ) ) return false;
+	if ( m_Boxes.size() > 0xffff ) return false;
+	if ( !Stream.Write16( static_cast<IMF_UINT16>( m_Boxes.size() ) ) ) return false;
+	for( i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) if ( !(*i)->Write( Stream ) ) return false;
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//         Calculate box size         //
+//                                    //
+////////////////////////////////////////
+// Return value = Whole box size in bytes (-1 means error)
+IMF_INT64	CItemInfoBox::CalcSize( void )
+{
+	IMF_INT64	BoxSize;
+	IMF_INT64	WholeSize = 2;
+	CBoxVector::iterator	i;
+
+	if ( m_Boxes.size() > 0xffff ) { SetLastError( E_IINF_ENTRY_COUNT ); return -1; }
+	for( i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) {
+		BoxSize = (*i)->CalcSize();
+		if ( BoxSize < 0 ) { SetLastError( E_BOX_SIZE ); return -1; }
+		WholeSize += BoxSize;
+		if ( WholeSize < 0 ) { SetLastError( E_BOX_SIZE ); return -1; }
+	}
+	return SetDataSize( WholeSize );
+}
+
+//////////////////////////////////////////////////////////////////////
+//                                                                  //
+//                   CItemInfoEntry class (infe)                    //
+//                                                                  //
+//////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////
+//                                    //
+//            Constructor             //
+//                                    //
+////////////////////////////////////////
+CItemInfoEntry::CItemInfoEntry( IMF_UINT8 version ) : CFullBox( IMF_FOURCC_INFE, NULL, version, 0 )
+{
+	m_item_ID = 0;
+	m_item_protection_index = 0;
+	m_content_length = 0;
+	m_transfer_length = 0;
+}
+
+////////////////////////////////////////
+//                                    //
+//                Read                //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// Return value = true:Success / false:Error
+bool	CItemInfoEntry::Read( CBaseStream& Stream )
+{
+	IMF_INT64	MaxLen;
+	IMF_UINT8	i, EntryCount;
+	IMF_UINT32	GroupId;
+
+	if ( !CFullBox::Read( Stream ) ) return false;
+	MaxLen = GetDataSize();
+	if ( ( m_version == 0 ) || ( m_version == 1 ) ) {
+		if ( !Stream.Read16( m_item_ID ) || !Stream.Read16( m_item_protection_index ) ) { SetLastError( E_READ_STREAM ); return false; }
+		MaxLen -= 4;
+		if ( !ReadString( Stream, m_item_name, MaxLen ) ) return false;
+		MaxLen -= m_item_name.length() + 1;
+		if ( !ReadString( Stream, m_content_type, MaxLen ) ) return false;
+		MaxLen -= m_content_type.length() + 1;
+	}
+	if ( m_version == 0 ) {
+		if ( MaxLen > 0 ) {
+			if ( !ReadString( Stream, m_content_encoding, MaxLen ) ) return false;
+			MaxLen -= m_content_encoding.length() + 1;
+		}
+		m_content_location.erase();
+		m_content_MD5.erase();
+		m_content_length = m_transfer_length = 0;
+		m_group_id.clear();
+	}
+	if ( m_version == 1 ) {
+		if ( !ReadString( Stream, m_content_encoding, MaxLen ) ) return false;
+		MaxLen -= m_content_encoding.length() + 1;
+		if ( !ReadString( Stream, m_content_location, MaxLen ) ) return false;
+		MaxLen -= m_content_location.length() + 1;
+		if ( !ReadString( Stream, m_content_MD5, MaxLen ) ) return false;
+		MaxLen -= m_content_MD5.length() + 1;
+		if ( !Stream.Read32( m_content_length ) || !Stream.Read32( m_transfer_length ) || !Stream.Read8( EntryCount ) ) { SetLastError( E_READ_STREAM ); return false; }
+		for( i=1; i<=EntryCount; i++ ) {
+			if ( !Stream.Read32( GroupId ) ) { SetLastError( E_READ_STREAM ); return false; }
+			m_group_id.push_back( GroupId );
+		}
+	}
+	if ( CheckReadSize( Stream ) != 0 ) { SetLastError( E_BOX_SIZE ); return false; }
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//               Write                //
+//                                    //
+////////////////////////////////////////
+// Stream = Output stream
+// Return value = true:Success / false:Error
+bool	CItemInfoEntry::Write( CBaseStream& Stream ) const
+{
+	IMF_UINT32	StrLen;
+	IMF_UINT8	EntryCount;
+	vector<IMF_UINT32>::const_iterator	iGroupId;
+
+	if ( !CFullBox::Write( Stream ) ) return false;
+	if ( ( m_version == 0 ) || ( m_version == 1 ) ) {
+		if ( !Stream.Write16( m_item_ID ) || !Stream.Write16( m_item_protection_index ) ) return false;
+		StrLen = static_cast<IMF_UINT32>( m_item_name.length() ) + 1;
+		if ( Stream.Write( m_item_name.c_str(), StrLen ) != StrLen ) return false;
+		StrLen = static_cast<IMF_UINT32>( m_content_type.length() ) + 1;
+		if ( Stream.Write( m_content_type.c_str(), StrLen ) != StrLen ) return false;
+	}
+	if ( m_version == 0 ) {
+		if ( !m_content_encoding.empty() ) {
+			StrLen = static_cast<IMF_UINT32>( m_content_encoding.length() ) + 1;
+			if ( Stream.Write( m_content_encoding.c_str(), StrLen ) != StrLen ) return false;
+		}
+	}
+	if ( m_version == 1 ) {
+		StrLen = static_cast<IMF_UINT32>( m_content_encoding.length() ) + 1;
+		if ( Stream.Write( m_content_encoding.c_str(), StrLen ) != StrLen ) return false;
+		StrLen = static_cast<IMF_UINT32>( m_content_location.length() ) + 1;
+		if ( Stream.Write( m_content_location.c_str(), StrLen ) != StrLen ) return false;
+		StrLen = static_cast<IMF_UINT32>( m_content_MD5.length() ) + 1;
+		if ( Stream.Write( m_content_MD5.c_str(), StrLen ) != StrLen ) return false;
+		if ( !Stream.Write32( m_content_length ) || !Stream.Write32( m_transfer_length ) ) return false;
+		if ( m_group_id.size() > 0xff ) return false;
+		EntryCount = static_cast<IMF_UINT8>( m_group_id.size() );
+		if ( !Stream.Write8( EntryCount ) ) return false;
+		for( iGroupId=m_group_id.begin(); iGroupId!=m_group_id.end(); iGroupId++ ) if ( !Stream.Write32( *iGroupId ) ) return false;
+	}
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//         Calculate box size         //
+//                                    //
+////////////////////////////////////////
+// Return value = Whole box size in bytes (-1 means error)
+IMF_INT64	CItemInfoEntry::CalcSize( void )
+{
+	IMF_INT64	Size = 0;
+	if ( ( m_version == 0 ) || ( m_version == 1 ) ) {
+		Size += 4 + m_item_name.length() + 1 + m_content_type.length() + 1;
+	}
+	if ( m_version == 0 ) {
+		if ( !m_content_encoding.empty() ) Size += m_content_encoding.length() + 1;
+	}
+	if ( m_version == 1 ) {
+		Size += m_content_encoding.length() + 1 + m_content_location.length() + 1 + m_content_MD5.length() + 1 + 9 + m_group_id.size() * 4;
+	}
+	return SetDataSize( Size );
+}
+
+//////////////////////////////////////////////////////////////////////
+//                                                                  //
+//                       CXMLBox class (xml )                       //
+//                                                                  //
+//////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////
+//                                    //
+//                Read                //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// Return value = true:Success / false:Error
+bool	CXMLBox::Read( CBaseStream& Stream )
+{
+	if ( !CFullBox::Read( Stream ) ) return false;
+	if ( !ReadString( Stream, m_xml, GetDataSize() ) ) return false;
+	if ( CheckReadSize( Stream ) != 0 ) { SetLastError( E_BOX_SIZE ); return false; }
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//               Write                //
+//                                    //
+////////////////////////////////////////
+// Stream = Output stream
+// Return value = true:Success / false:Error
+bool	CXMLBox::Write( CBaseStream& Stream ) const
+{
+	IMF_UINT32	XmlLen;
+	if ( !CFullBox::Write( Stream ) ) return false;
+	XmlLen = static_cast<IMF_UINT32>( m_xml.length() ) + 1;
+	if ( Stream.Write( m_xml.c_str(), XmlLen ) != XmlLen ) return false;
+	return true;
+}
+
+//////////////////////////////////////////////////////////////////////
+//                                                                  //
+//                    CBinaryXMLBox class (bxml)                    //
+//                                                                  //
+//////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////
+//                                    //
+//                Read                //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// Return value = true:Success / false:Error
+bool	CBinaryXMLBox::Read( CBaseStream& Stream )
+{
+	IMF_INT64	DataSize;
+
+	// Read basic fields.
+	if ( !CFullBox::Read( Stream ) ) return false;
+
+	// [LIMITATION] Data size must be less than 2GB.
+	DataSize = GetDataSize();
+	if ( ( DataSize < 0 ) || ( ( DataSize >> 32 ) != 0 ) ) { SetLastError( E_BOX_SIZE ); return false; }
+
+	// Free data.
+	if ( m_data ) { delete[] m_data; m_data = NULL; }
+
+	if ( DataSize > 0 ) {
+		// Allocate buffer.
+		m_data = new IMF_UINT8 [ static_cast<IMF_UINT32>( DataSize ) ];
+		if ( m_data == NULL ) { SetLastError( E_MEMORY ); return false; }	// Memory error.
+		// Read data.
+		if ( Stream.Read( m_data, static_cast<IMF_UINT32>( DataSize ) ) != static_cast<IMF_UINT32>( DataSize ) ) { SetLastError( E_READ_STREAM ); return false; }
+	}
+	if ( CheckReadSize( Stream ) != 0 ) { SetLastError( E_BOX_SIZE ); return false; }
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//               Write                //
+//                                    //
+////////////////////////////////////////
+// Stream = Output stream
+// Return value = true:Success / false:Error
+bool	CBinaryXMLBox::Write( CBaseStream& Stream ) const
+{
+	IMF_INT64	DataSize;
+
+	// [LIMITATION] Data size must be less than 2GB.
+	DataSize = GetDataSize();
+	if ( ( DataSize < 0 ) || ( ( DataSize >> 32 ) != 0 ) ) return false;
+
+	// Write basic fields.
+	if ( !CFullBox::Write( Stream ) ) return false;
+
+	if ( DataSize > 0 ) {
+		if ( m_data == NULL ) return false;
+		// Write data.
+		if ( Stream.Write( m_data, static_cast<IMF_UINT32>( DataSize ) ) != static_cast<IMF_UINT32>( DataSize ) ) return false;
+	}
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//        Set binary XML data         //
+//                                    //
+////////////////////////////////////////
+// pData = Pointer to XML data
+// Size = XML data size in bytes
+// Return value = true:Success / false:Error
+bool	CBinaryXMLBox::SetData( const void* pData, IMF_UINT64 Size )
+{
+	if ( m_data ) { delete[] m_data; m_data = NULL; }
+	// [LIMITATION] XML data must be less than 4GB.
+	if ( Size >> 32 ) { SetLastError( E_BXML_SIZE ); return false; }
+	m_data = new IMF_UINT8 [ static_cast<IMF_UINT32>( Size ) ];
+	if ( m_data == NULL ) { SetLastError( E_MEMORY ); return false; }
+	memcpy( m_data, pData, static_cast<IMF_UINT32>( Size ) );
+	return ( SetDataSize( Size ) > 0 );
+}
+
+//////////////////////////////////////////////////////////////////////
+//                                                                  //
+//                   CPrimaryItemBox class (pitm)                   //
+//                                                                  //
+//////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////
+//                                    //
+//                Read                //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// Return value = true:Success / false:Error
+bool	CPrimaryItemBox::Read( CBaseStream& Stream )
+{
+	if ( !CFullBox::Read( Stream ) ) return false;
+	if ( !Stream.Read16( m_item_ID ) ) { SetLastError( E_READ_STREAM ); return false; }
+	if ( CheckReadSize( Stream ) != 0 ) { SetLastError( E_BOX_SIZE ); return false; }
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//               Write                //
+//                                    //
+////////////////////////////////////////
+// Stream = Output stream
+// Return value = true:Success / false:Error
+bool	CPrimaryItemBox::Write( CBaseStream& Stream ) const
+{
+	if ( !CFullBox::Write( Stream ) ) return false;
+	if ( !Stream.Write16( m_item_ID ) ) return false;
 	return true;
 }
 

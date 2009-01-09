@@ -70,7 +70,7 @@ public:
 	void	Allocate( long N );
 	void	Free( void );
 public:
-	long*	m_ltpmat;
+	int*	m_ltpmat;
 	short	m_ltp;
 	short	m_plag;
 	short	m_pcoef_multi[5];
@@ -87,14 +87,14 @@ public:
 	~CLtp( void ) { Free(); }
 	void	Allocate( long Chan, long N );
 	void	Free( void );
-	void	Encode( long Channel, long* d, unsigned char* bytebuf, long N, long Freq, CBitIO* out );
+	void	Encode( long Channel, int* d, unsigned char* bytebuf, long N, long Freq, CBitIO* out );
 	void	Decode( long Channel, long N, long Freq, CBitIO* in );
-	void	PitchSubtract( CLtpBuffer* pOutput, long* d, long* d0, long N, short P, long Freq, short Pitch );
-	void	PitchReconstruct( long* d, long N, short P, long Channel, long Freq );
-	void	PitchDetector( CLtpBuffer* pOutput, long *d, long N, short P, long Freq, short Pitch );
+	void	PitchSubtract( CLtpBuffer* pOutput, int* d, int* d0, long N, short P, long Freq, short Pitch );
+	void	PitchReconstruct( int* d, long N, short P, long Channel, long Freq );
+	void	PitchDetector( CLtpBuffer* pOutput, int *d, long N, short P, long Freq, short Pitch );
 protected:
-	static	void	AddMulti( long* d, long end, short ival, const short* qcf, short m );
-	static	void	SubMulti( const long* d, long* dout, long end, short ival, const short* qcf, short m );
+	static	void	AddMulti( int* d, long end, short ival, const short* qcf, short m );
+	static	void	SubMulti( const int* d, int* dout, long end, short ival, const short* qcf, short m );
 	static	void	RiceEncodePlus( int symbol, int s, BITIO* p );
 	static	void	PutBit( unsigned char bit, BITIO* p );
 	static	int		RiceDecodePlus( int s, BITIO* p );
@@ -110,18 +110,18 @@ public:
 //                                                                  //
 //////////////////////////////////////////////////////////////////////
 typedef	struct _MCC_ENC_BUFFER {
-	long**			m_dmat;
-	long**			m_stdmat;
-	long**			m_orgdmat;
-	long**			m_asimat;
-	long**			m_puchan;
+	int**			m_dmat;
+	int**			m_stdmat;
+	int**			m_orgdmat;
+	int**			m_asimat;
+	int**			m_puchan;
 	char*			m_xpara;
-	long*			m_tmppuchan;
-	long*			m_gmmodr;
+	int*			m_tmppuchan;
+	int*			m_gmmodr;
 	short*			m_shift;
-	long*			m_puch;
-	long*			m_stackpuch;
-	long*			m_mccasi;
+	int*			m_puch;
+	int*			m_stackpuch;
+	int*			m_mccasi;
 	short*			m_optP;
 	unsigned char*	m_tmpbuf1;
 	unsigned char*	m_tmpbuf2;
@@ -129,48 +129,48 @@ typedef	struct _MCC_ENC_BUFFER {
 	long			m_Chan;
 	CLtp			m_Ltp;
 	//Added for MCC Extension
-	long**			m_tdtau;
-	long*			m_tmptdtau;
+	int**			m_tdtau;
+	int*			m_tmptdtau;
 	short**			m_MccMode;
 	short*			m_tmpMM;
-	long***			m_cubgmm;
-	long**			m_mtgmm;
-	long*			m_vgmm;
+	int***			m_cubgmm;
+	int**			m_mtgmm;
+	int*			m_vgmm;
 	long			m_MaxTau;
 } MCC_ENC_BUFFER;
 
 typedef	struct _MCC_DEC_BUFFER {
-	long**		m_dmat;
-	long**		m_parqmat;
-	long**		m_puchan;
+	int**		m_dmat;
+	int**		m_parqmat;
+	int**		m_puchan;
 	char*		m_xpara;
 	short*		m_shift;
-	long*		m_mccparq;
-	long*		m_puch;
+	int*		m_mccparq;
+	int*		m_puch;
 	short*		m_optP;
-	long*		m_tmppuchan;
+	int*		m_tmppuchan;
 	long		m_Chan;
 	CLtp		m_Ltp;
 	//Added for MCC Extension
-	long**		m_tdtau;
-	long*		m_tmptdtau;
+	int**		m_tdtau;
+	int*		m_tmptdtau;
 	short**		m_MccMode;
 	short*		m_tmpMM;
-	long***		m_cubgmm;
-	long**		m_mtgmm;
-	long*		m_vgmm;
+	int***		m_cubgmm;
+	int**		m_mtgmm;
+	int*		m_vgmm;
 } MCC_DEC_BUFFER;
 
 typedef struct _CHANDISTMAT {
 	double chandist;
-	long chanmas;
-	long chansla;
+	int chanmas;
+	int chansla;
 } CHANDISTMAT;
 
 typedef struct _MASTERS {
 	double chandist;
-	long point;
-	long chan;
+	int point;
+	int chan;
 } MASTERS;
 
 
@@ -197,10 +197,10 @@ void	Cholesky( double* a, double* b, const double* c, int n );
 // MCC-extension functions
 void	SubtractResidualTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N , short MccMode);
 void	ReconstructResidualTD( MCC_DEC_BUFFER* pBuffer, long Chan, long N );
-long	GetTimeDiff(long *sdmas, long *sdsla, long N, long MaxTau);
-long	GetTimeDiff0(long *sdmas, long *sdsla, long N, long MaxTau);
+long	GetTimeDiff(int *sdmas, int *sdsla, long N, long MaxTau);
+long	GetTimeDiff0(int *sdmas, int *sdsla, long N, long MaxTau);
 void	CheckFrameDistanceTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N, long MCC );
-void	GetGammaMulti3Tap(long *sdmas, long *sdsla, long N, long *vgmm, long Tau);
-void	GetGammaMulti6Tap(long *sdmas, long *sdsla, long N, long *vgmm, long Tau);
+void	GetGammaMulti3Tap(int *sdmas, int *sdsla, long N, int *vgmm, long Tau);
+void	GetGammaMulti6Tap(int *sdmas, int *sdsla, long N, int *vgmm, long Tau);
 
 #endif	// MCC_INCLUDED

@@ -41,5 +41,5 @@ contents : Header file for ec.cpp
  *
  *************************************************************************/
 
-short GetRicePara(long *x, long N, short *sx);
-long GetRiceBits(long *x, long N, short s);
+short GetRicePara(int *x, long N, short *sx);
+long GetRiceBits(int *x, long N, short s);

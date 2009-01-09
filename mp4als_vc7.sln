@@ -1,5 +1,5 @@
 Microsoft Visual Studio Solution File, Format Version 8.00
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mp4als", "mp4als.vcproj", "{75755626-C06E-490C-9CE3-4E3FA5DBA233}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mp4als", "mp4als_vc7.vcproj", "{75755626-C06E-490C-9CE3-4E3FA5DBA233}"
 	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
 EndProject

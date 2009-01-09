@@ -45,19 +45,19 @@ contents : Header file for lpc.cpp
  *************************************************************************/
 
 void acf(double *x, long N, long k, short norm, double *rxx);
-void hamming(long *x, double *xd, long N);
-void hanning(long *x, double *xd, long N);
-void blackman(long *x, double *xd, long N);
-void rect(long *x, double *xd, long N);
+void hamming(int *x, double *xd, long N);
+void hanning(int *x, double *xd, long N);
+void blackman(int *x, double *xd, long N);
+void rect(int *x, double *xd, long N);
 short durbin(short ord, double *rxx, double *par);
-short par2cof(long *cof, long *par, short ord, short Q);
+short par2cof(int *cof, int *par, short ord, short Q);
 
-short GetCof(long *x, long N, short P, short win, double *par);
-void GetResidual(long *x, long N, short P, short Q, long *cof, long *d);
-void GetSignal(long *x, long N, short P, short Q, long *cof, long *d);
-short GetResidualRA(long *x, long N, short P, short Q, long *par, long *cof, long *d);
-short GetSignalRA(long *x, long N, short P, short Q, long *par, long *cof, long *d);
+short GetCof(int *x, long N, short P, short win, double *par);
+void GetResidual(int *x, long N, short P, short Q, int *cof, int *d);
+void GetSignal(int *x, long N, short P, short Q, int *cof, int *d);
+short GetResidualRA(int *x, long N, short P, short Q, int *par, int *cof, int *d);
+short GetSignalRA(int *x, long N, short P, short Q, int *par, int *cof, int *d);
 
-short BlockIsZero(long *x, long N);
-long BlockIsConstant(long *x, long N);
-short ShiftOutEmptyLSBs(long *x, long N);
+short BlockIsZero(int *x, long N);
+int BlockIsConstant(int *x, long N);
+short ShiftOutEmptyLSBs(int *x, long N);

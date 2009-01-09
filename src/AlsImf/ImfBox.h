@@ -1,39 +1,31 @@
-/******************* MPEG-4 Audio Lossless Coding ******************
- ******************* MPEG-A Audio Archival MAF    ******************
+/***************** MPEG-4 Audio Lossless Coding *********************
 
 This software module was originally developed by
 
 NTT (Nippon Telegraph and Telephone Corporation), Japan
 
-in the course of development of the MPEG-4 Audio standard ISO/IEC 
-14496-3, associated amendments and the ISO/IEC 23000-6: Audio 
-Archival Multimedia Application Format standard.
-This software module is an implementation of a part of one or more 
-MPEG-4 Audio lossless coding tools as specified by the MPEG-4 Audio 
-standard and ISO/IEC 23000-6: Audio Archival Multimedia Application 
-Format tools  as specified by the MPEG-A Requirements.
-ISO/IEC gives users of the MPEG-4 Audio standards and of ISO/IEC 
-23000-6: Audio Archival Multimedia Application Format free license 
-to this software module or modifications thereof for use in hardware 
-or software products claiming conformance to MPEG-4 Audio and MPEG-A.
-Those intending to use this software module in hardware or software 
-products are advised that its use may infringe existing patents. 
-The original developer of this software module and his/her company, 
-the subsequent editors and their companies, and ISO/IEC have no 
-liability for use of this software module or modifications thereof 
-in an implementation.
-Copyright is not released for non MPEG-4 / MPEG-A conforming 
-products. The organizations named above retain full rights to use 
-the code for their own purpose, assign or donate the code to a third 
-party and inhibit third parties from using the code for non MPEG-4 / 
-MPEG-A conforming products.
+in the course of development of the MPEG-4 Audio standard ISO/IEC 14496-3
+and associated amendments. This software module is an implementation of
+a part of one or more MPEG-4 Audio lossless coding tools as specified
+by the MPEG-4 Audio standard. ISO/IEC gives users of the MPEG-4 Audio
+standards free license to this software module or modifications
+thereof for use in hardware or software products claiming conformance
+to the MPEG-4 Audio standards. Those intending to use this software
+module in hardware or software products are advised that this use may
+infringe existing patents. The original developer of this software
+module, the subsequent editors and their companies, and ISO/IEC have
+no liability for use of this software module or modifications thereof
+in an implementation. Copyright is not released for non MPEG-4 Audio
+conforming products. The original developer retains full right to use
+the code for the developer's own purpose, assign or donate the code to
+a third party and to inhibit third party from using the code for non
+MPEG-4 Audio conforming products. This copyright notice must be included
+in all copies or derivative works.
 
 Copyright (c) 2006.
 
-This notice must be included in all copies or derivative works.
-
 Filename : ImfBox.h
-Project  : MPEG-A Audio Archival Multimedia Application Format
+Project  : MPEG-4 Audio Lossless Coding
 Author   : Koichi Sugiura (NTT Advanced Technology Corporation)
            Noboru Harada  (NTT)
 Date     : August 31st, 2006
@@ -41,14 +33,35 @@ Contents : Box classes defined in ISO/IEC 14496-12
 
 *******************************************************************/
 
+/******************************************************************
+ *
+ * Modifications:
+ *
+ * 2007/05/10 by Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - integrated ImfBoxAmd1.h.
+ *   - supported pitm box.
+ *   - updated infe box.
+ *
+ * 2007/05/23, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added Print() to every class.
+ *   - changed indent value type in Out() and Dump().
+ *
+ * 2008/10/20, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added CContainerFullBox class.
+ *   - debugged CMetaBox to be FullBox-based.
+ *
+ ******************************************************************/
+
 #if !defined( IMFBOX_INCLUDED )
 #define	IMFBOX_INCLUDED
 
 #include	<iostream>
 #include	<vector>
+#include	<string>
 #include	<cstring>
 #include	"ImfType.h"
 #include	"ImfStream.h"
+#include	"ImfPrintStream.h"
 #include	"ImfDescriptor.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -123,6 +136,34 @@ Contents : Box classes defined in ISO/IEC 14496-12
 #define	IMF_FOURCC_MFRA		IMF_FOURCC( 'm','f','r','a' )	// implemented
 #define	IMF_FOURCC_TFRA		IMF_FOURCC( 't','f','r','a' )	// to be implemented
 #define	IMF_FOURCC_MFRO		IMF_FOURCC( 'm','f','r','o' )	// to be implemented
+#define	IMF_FOURCC_PDIN		IMF_FOURCC( 'p','d','i','n' )	// to be implemented
+#define	IMF_FOURCC_SDTP		IMF_FOURCC( 's','d','t','p' )	// to be implemented
+#define	IMF_FOURCC_SBGP		IMF_FOURCC( 's','b','g','p' )	// to be implemented
+#define	IMF_FOURCC_SGPD		IMF_FOURCC( 's','g','p','d' )	// to be implemented
+#define	IMF_FOURCC_SUBS		IMF_FOURCC( 's','u','b','s' )	// to be implemented
+#define	IMF_FOURCC_IPMC		IMF_FOURCC( 'i','p','m','c' )	// to be implemented
+#define	IMF_FOURCC_META		IMF_FOURCC( 'm','e','t','a' )	// implemented
+#define	IMF_FOURCC_ILOC		IMF_FOURCC( 'i','l','o','c' )	// implemented
+#define	IMF_FOURCC_IPRO		IMF_FOURCC( 'i','p','r','o' )	// to be implemented
+#define	IMF_FOURCC_SINF		IMF_FOURCC( 's','i','n','f' )	// to be implemented
+#define	IMF_FOURCC_FRMA		IMF_FOURCC( 'f','r','m','a' )	// to be implemented
+#define	IMF_FOURCC_IMIF		IMF_FOURCC( 'i','m','i','f' )	// to be implemented
+#define	IMF_FOURCC_SCHM		IMF_FOURCC( 's','c','h','m' )	// to be implemented
+#define	IMF_FOURCC_SCHI		IMF_FOURCC( 's','c','h','i' )	// to be implemented
+#define	IMF_FOURCC_IINF		IMF_FOURCC( 'i','i','n','f' )	// implemented
+#define	IMF_FOURCC_INFE		IMF_FOURCC( 'i','n','f','e' )	// implemented
+#define	IMF_FOURCC_XML		IMF_FOURCC( 'x','m','l',' ' )	// implemented
+#define	IMF_FOURCC_BXML		IMF_FOURCC( 'b','x','m','l' )	// implemented
+#define	IMF_FOURCC_PITM		IMF_FOURCC( 'p','i','t','m' )	// implemented
+#define	IMF_FOURCC_MECO		IMF_FOURCC( 'm','e','c','o' )	// to be implemented
+#define	IMF_FOURCC_MERE		IMF_FOURCC( 'm','e','r','e' )	// to be implemented
+#define	IMF_FOURCC_FIIN		IMF_FOURCC( 'f','i','i','n' )	// to be implemented
+#define	IMF_FOURCC_PAEN		IMF_FOURCC( 'p','a','e','n' )	// to be implemented
+#define	IMF_FOURCC_FPAR		IMF_FOURCC( 'f','p','a','r' )	// to be implemented
+#define	IMF_FOURCC_FECR		IMF_FOURCC( 'f','e','c','r' )	// to be implemented
+#define	IMF_FOURCC_SEGR		IMF_FOURCC( 's','e','g','r' )	// to be implemented
+#define	IMF_FOURCC_GITN		IMF_FOURCC( 'g','i','t','n' )	// to be implemented
+#define	IMF_FOURCC_TSEL		IMF_FOURCC( 't','s','e','l' )	// to be implemented
 
 #define	IMF_FOURCC_UUID		IMF_FOURCC( 'u','u','i','d' )	// Not a box
 #define	IMF_FOURCC_SOUN		IMF_FOURCC( 's','o','u','n' )	// Not a box
@@ -132,6 +173,7 @@ namespace NAlsImf {
 
 	class	CBox;
 	class	CSampleEntry;
+	class	CPrintStream;
 
 	//////////////////////////////////////////////////////////////////////
 	//                                                                  //
@@ -151,6 +193,13 @@ namespace NAlsImf {
 	const IMF_UINT32	E_STSD_SAMPLE_ENTRY_TYPE = 110;
 	const IMF_UINT32	E_STZ2_FIELD_SIZE        = 111;
 	const IMF_UINT32	E_HINTCDSC_TRACK_ID      = 112;
+	const IMF_UINT32	E_BXML_SIZE              = 113;
+	const IMF_UINT32	E_ILOC_OFFSET_SIZE       = 114;
+	const IMF_UINT32	E_ILOC_LENGTH_SIZE       = 115;
+	const IMF_UINT32	E_ILOC_BASE_OFFSET_SIZE  = 116;
+	const IMF_UINT32	E_ILOC_SIZE              = 117;
+	const IMF_UINT32	E_ILOC_NO_EXTENT         = 118;
+	const IMF_UINT32	E_IINF_ENTRY_COUNT       = 119;
 
 	//////////////////////////////////////////////////////////////////////
 	//                                                                  //
@@ -196,8 +245,9 @@ namespace NAlsImf {
 		virtual	bool		Read( CBaseStream& Stream );
 		virtual	bool		Write( CBaseStream& Stream ) const;
 		virtual	IMF_INT64	CalcSize( void ) { return SetDataSize( GetDataSize() ); }
-		virtual	void		Out( std::ostream& Stream, int Indent ) const;
-		virtual	void		Dump( std::ostream& Stream, int Indent, IMF_UINT64 MaxLen = 0 ) const;
+		virtual	void		Out( std::ostream& Stream, IMF_UINT16 Indent ) const;
+		virtual	void		Dump( std::ostream& Stream, IMF_UINT16 Indent, IMF_UINT64 MaxLen = 0 ) const;
+		virtual	void		Print( CPrintStream& Stream ) const;
 		virtual	CBox*		GetNextChild( CBox* pLast ) { return NULL; }
 		virtual	bool		FindBox( IMF_UINT32 Type, CBox*& pLast );
 		virtual	IMF_UINT32	GetType( void ) const { return m_type; }
@@ -226,6 +276,11 @@ namespace NAlsImf {
 	public:
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
+		void		Print( CPrintStream& Stream ) const {
+			CBox::Print( Stream );
+			IMF_PRINT( version );
+			IMF_PRINT( flags );
+		}
 	protected:
 		IMF_UINT8	m_version;
 		IMF_UINT32	m_flags;	// 24-bit
@@ -260,7 +315,7 @@ namespace NAlsImf {
 	//////////////////////////////////////////////////////////////////////
 	//                       CContainerBox class                        //
 	//////////////////////////////////////////////////////////////////////
-	// Base class of container boxes.
+	// Base class of box-based container boxes.
 	class	CContainerBox : public CBox {
 	protected:
 		CContainerBox( IMF_UINT32 type, const IMF_UINT8* usertype = NULL ) : CBox( type, usertype ) {}
@@ -268,13 +323,49 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void );
-		void		Out( std::ostream& Stream, int Indent ) const {
+		void		Out( std::ostream& Stream, IMF_UINT16 Indent ) const {
 			CBox::Out( Stream, Indent );
 			for( CBoxVector::const_iterator i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) (*i)->Out( Stream, Indent+1 );
 		}
-		void		Dump( std::ostream& Stream, int Indent, IMF_UINT64 MaxLen = 0 ) const {
+		void		Dump( std::ostream& Stream, IMF_UINT16 Indent, IMF_UINT64 MaxLen = 0 ) const {
 			CBox::Dump( Stream, Indent, MaxLen );
 			for( CBoxVector::const_iterator i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) (*i)->Dump( Stream, Indent+1, MaxLen );
+		}
+		void		Print( CPrintStream& Stream ) const {
+			CBox::Print( Stream );
+			Stream.Indent( 1 );
+			for( CBoxVector::const_iterator i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) (*i)->Print( Stream );
+			Stream.Indent( -1 );
+		}
+		CBox*		GetNextChild( CBox* pLast ) { return m_Boxes.GetNext( pLast ); }
+	public:
+		CBoxVector	m_Boxes;
+	};
+
+	//////////////////////////////////////////////////////////////////////
+	//                     CContainerFullBox class                      //
+	//////////////////////////////////////////////////////////////////////
+	// Base class of fullbox-based container boxes.
+	class	CContainerFullBox : public CFullBox {
+	protected:
+		CContainerFullBox( IMF_UINT32 type, const IMF_UINT8* usertype = NULL, IMF_UINT8 version = 0, IMF_UINT32 flags = 0 ) : CFullBox( type, usertype, version, flags ) {}
+	public:
+		bool		Read( CBaseStream& Stream );
+		bool		Write( CBaseStream& Stream ) const;
+		IMF_INT64	CalcSize( void );
+		void		Out( std::ostream& Stream, IMF_UINT16 Indent ) const {
+			CFullBox::Out( Stream, Indent );
+			for( CBoxVector::const_iterator i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) (*i)->Out( Stream, Indent+1 );
+		}
+		void		Dump( std::ostream& Stream, IMF_UINT16 Indent, IMF_UINT64 MaxLen = 0 ) const {
+			CFullBox::Dump( Stream, Indent, MaxLen );
+			for( CBoxVector::const_iterator i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) (*i)->Dump( Stream, Indent+1, MaxLen );
+		}
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			Stream.Indent( 1 );
+			for( CBoxVector::const_iterator i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) (*i)->Print( Stream );
+			Stream.Indent( -1 );
 		}
 		CBox*		GetNextChild( CBox* pLast ) { return m_Boxes.GetNext( pLast ); }
 	public:
@@ -295,6 +386,15 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 8 + 4 * m_compatible_brands.size() ); }
+		void		Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CBox::Print( Stream );
+			IMF_PRINT( major_brand );
+			IMF_PRINT( minor_version );
+			for( std::vector<IMF_UINT32>::const_iterator i=m_compatible_brands.begin(); i!=m_compatible_brands.end(); i++ ) {
+				Stream << "compatible_brands[" << n++ << "] = " << *i << std::endl;
+			}
+		}
 		IMF_UINT32				m_major_brand;
 		IMF_UINT32				m_minor_version;
 		std::vector<IMF_UINT32>	m_compatible_brands;
@@ -318,6 +418,17 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( ( m_version == 0 ) ? 96 : 108 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( creation_time );
+			IMF_PRINT( modification_time );
+			IMF_PRINT( timescale );
+			IMF_PRINT( duration );
+			IMF_PRINT( rate );
+			IMF_PRINT( volume );
+			for( IMF_UINT8 i=0; i<9; i++ ) Stream << "matrix[" << i << "] = " << m_matrix[i] << std::endl;
+			IMF_PRINT( next_track_ID );
+		}
 		IMF_UINT64	m_creation_time;
 		IMF_UINT64	m_modification_time;
 		IMF_UINT32	m_timescale;
@@ -341,6 +452,19 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( ( m_version == 0 ) ? 80 : 92 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( creation_time );
+			IMF_PRINT( modification_time );
+			IMF_PRINT( track_ID );
+			IMF_PRINT( duration );
+			IMF_PRINT( layer );
+			IMF_PRINT( alternate_group );
+			IMF_PRINT( volume );
+			for( IMF_UINT8 i=0; i<9; i++ ) Stream << "matrix[" << i << "] = " << m_matrix[i] << std::endl;
+			IMF_PRINT( width );
+			IMF_PRINT( height );
+		}
 		IMF_UINT64	m_creation_time;
 		IMF_UINT64	m_modification_time;
 		IMF_UINT32	m_track_ID;
@@ -366,6 +490,13 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( m_track_IDs.size() * 4 ); }
+		void		Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CBox::Print( Stream );
+			for( std::vector<IMF_UINT32>::const_iterator i=m_track_IDs.begin(); i!=m_track_IDs.end(); i++ ) {
+				Stream << "track_IDs[" << n++ << "] = " << *i << std::endl;
+			}
+		}
 		std::vector<IMF_UINT32>	m_track_IDs;
 	};
 
@@ -382,6 +513,14 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( ( m_version == 0 ) ? 20 : 32 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( creation_time );
+			IMF_PRINT( modification_time );
+			IMF_PRINT( timescale );
+			IMF_PRINT( duration );
+			Stream << "language = " << m_language[0] << " " << m_language[1] << " " << m_language[2] << std::endl;
+		}
 		IMF_UINT64	m_creation_time;
 		IMF_UINT64	m_modification_time;
 		IMF_UINT32	m_timescale;
@@ -397,6 +536,11 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 20 + m_name.length() + 1 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( handler_type );
+			IMF_PRINT( name );
+		}
 		IMF_UINT32	m_handler_type;
 		std::string	m_name;
 	};
@@ -414,6 +558,11 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 8 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( graphicsmode );
+			Stream << "opcolor = " << m_opcolor[0] << " " << m_opcolor[1] << " " << m_opcolor[2] << std::endl;
+		}
 		IMF_UINT16	m_graphicsmode;
 		IMF_UINT16	m_opcolor[3];
 	};
@@ -426,6 +575,10 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 4 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( balance );
+		}
 		IMF_INT16	m_balance;
 	};
 
@@ -437,6 +590,13 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 12 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( maxPDUsize );
+			IMF_PRINT( avgPDUsize );
+			IMF_PRINT( maxbitrate );
+			IMF_PRINT( avgbitrate );
+		}
 		IMF_UINT16	m_maxPDUsize;
 		IMF_UINT16	m_avgPDUsize;
 		IMF_UINT32	m_maxbitrate;
@@ -461,6 +621,10 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( ( m_flags == 1 ) ? 0 : m_location.length() + 1 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( location );
+		}
 		std::string	m_location;
 	};
 
@@ -472,6 +636,11 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( m_name.length() + m_location.length() + 2 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( name );
+			IMF_PRINT( location );
+		}
 		std::string	m_name;
 		std::string	m_location;
 	};
@@ -485,6 +654,12 @@ namespace NAlsImf {
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void );
 		CBox*		GetNextChild( CBox* pLast ) { return m_Entries.GetNext( pLast ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			Stream.Indent( 1 );
+			for( CBoxVector::const_iterator i=m_Entries.begin(); i!=m_Entries.end(); i++ ) (*i)->Print( Stream );
+			Stream.Indent( -1 );
+		}
 		CBoxVector	m_Entries;
 	};
 
@@ -506,6 +681,15 @@ namespace NAlsImf {
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 4 + m_Entries.size() * 8 ); }
 		void		GetVector( std::vector<IMF_UINT32>& SamplesPerFrame ) const;
+		void		Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CFullBox::Print( Stream );
+			for( std::vector<STTS_ENTRY>::const_iterator i=m_Entries.begin(); i!=m_Entries.end(); i++, n++ ) {
+				Stream << "entry[" << n << "]" << std::endl;
+				Stream << " sample_count = " << i->m_sample_count << std::endl;
+				Stream << " sample_delta = " << i->m_sample_delta << std::endl;
+			}
+		}
 		std::vector<STTS_ENTRY>	m_Entries;
 	};
 
@@ -521,6 +705,15 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 4 + m_Entries.size() * 8 ); }
+		void		Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CFullBox::Print( Stream );
+			for( std::vector<CTTS_ENTRY>::const_iterator i=m_Entries.begin(); i!=m_Entries.end(); i++, n++ ) {
+				Stream << "entry[" << n << "]" << std::endl;
+				Stream << " sample_count = " << i->m_sample_count << std::endl;
+				Stream << " sample_offset = " << i->m_sample_offset << std::endl;
+			}
+		}
 		std::vector<CTTS_ENTRY>	m_Entries;
 	};
 
@@ -533,6 +726,7 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void );
+		void		Print( CPrintStream& Stream ) const;
 		std::vector<CSampleEntry*>	m_Entries;
 	private:
 		void		Clear( void );
@@ -548,6 +742,15 @@ namespace NAlsImf {
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 8 + ( ( m_sample_size == 0 ) ? m_entry_sizes.size() * 4 : 0 ) ); }
 		void		GetVector( std::vector<IMF_UINT32>& SizesPerFrame ) const;
+		void		Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CFullBox::Print( Stream );
+			IMF_PRINT( sample_size );
+			IMF_PRINT( sample_count );
+			for( std::vector<IMF_UINT32>::const_iterator i=m_entry_sizes.begin(); i!=m_entry_sizes.end(); i++ ) {
+				Stream << "entry_sizes[" << n++ << "] = " << *i << std::endl;
+			}
+		}
 		IMF_UINT32				m_sample_size;
 		IMF_UINT32				m_sample_count;
 		std::vector<IMF_UINT32>	m_entry_sizes;
@@ -562,6 +765,14 @@ namespace NAlsImf {
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void );
 		void		GetVector( std::vector<IMF_UINT32>& SizesPerFrame ) const;
+		void		Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CFullBox::Print( Stream );
+			IMF_PRINT( field_size );
+			for( std::vector<IMF_UINT16>::const_iterator i=m_entry_sizes.begin(); i!=m_entry_sizes.end(); i++ ) {
+				Stream << "entry_sizes[" << n++ << "] = " << *i << std::endl;
+			}
+		}
 		IMF_UINT8				m_field_size;
 		std::vector<IMF_UINT16>	m_entry_sizes;
 	};
@@ -580,6 +791,16 @@ namespace NAlsImf {
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 4 + m_Entries.size() * 12 ); }
 		void		GetVector( std::vector<IMF_UINT32>& FramesPerChunk ) const;
+		void		Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CFullBox::Print( Stream );
+			for( std::vector<STSC_ENTRY>::const_iterator i=m_Entries.begin(); i!=m_Entries.end(); i++, n++ ) {
+				Stream << "entry[" << n << "]" << std::endl;
+				Stream << " first_chunk = " << i->m_first_chunk << std::endl;
+				Stream << " samples_per_chunk = " << i->m_samples_per_chunk << std::endl;
+				Stream << " sample_description_index = " << i->m_sample_description_index << std::endl;
+			}
+		}
 		std::vector<STSC_ENTRY>	m_Entries;
 	};
 
@@ -592,6 +813,13 @@ namespace NAlsImf {
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 4 + m_chunk_offsets.size() * 4 ); }
 		void		GetVector( std::vector<IMF_UINT64>& ChunkOffsets ) const;
+		void		Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CFullBox::Print( Stream );
+			for( std::vector<IMF_UINT32>::const_iterator i=m_chunk_offsets.begin(); i!=m_chunk_offsets.end(); i++ ) {
+				Stream << "chunk_offsets[" << n++ << "] = " << *i << std::endl;
+			}
+		}
 		std::vector<IMF_UINT32>	m_chunk_offsets;
 	};
 
@@ -604,6 +832,13 @@ namespace NAlsImf {
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 4 + m_chunk_offsets.size() * 8 ); }
 		void		GetVector( std::vector<IMF_UINT64>& ChunkOffsets ) const { ChunkOffsets = m_chunk_offsets; }
+		void		Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CFullBox::Print( Stream );
+			for( std::vector<IMF_UINT64>::const_iterator i=m_chunk_offsets.begin(); i!=m_chunk_offsets.end(); i++ ) {
+				Stream << "chunk_offsets[" << n++ << "] = " << *i << std::endl;
+			}
+		}
 		std::vector<IMF_UINT64>	m_chunk_offsets;
 	};
 
@@ -706,6 +941,285 @@ namespace NAlsImf {
 
 	//////////////////////////////////////////////////////////////////////
 	//            CMovieFragmentRandomAccessOffsetBox (mfro)            //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                CProgressiveDownloadInfoBox (pdin)                //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                 CSampleDependencyTypeBox (stdp)                  //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                     CSampleToGroupBox (sbgp)                     //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                CSampleGroupDescriptionBox (sgpd)                 //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                 CSubSampleInformationBox (subs)                  //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                      CIPMPControlBox (ipmc)                      //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                      CMetaBox class (meta)                       //
+	//////////////////////////////////////////////////////////////////////
+	IMF_DERIVE_CLASS( CMetaBox, CContainerFullBox, IMF_FOURCC_META );
+
+	//////////////////////////////////////////////////////////////////////
+	//                  CItemLocationBox class (iloc)                   //
+	//////////////////////////////////////////////////////////////////////
+	struct	CItemLocationBox : public CFullBox {
+
+		typedef	struct tagILOC_EXTENT {
+			IMF_UINT64	m_extent_offset;
+			IMF_UINT64	m_extent_length;
+		} ILOC_EXTENT;
+
+		struct	CItem {
+			CItem( void ) {}
+			CItem( const CItem& Src ) { *this = Src; }
+			CItem&	operator = ( const CItem& Src ) {
+				m_item_ID = Src.m_item_ID;
+				m_data_reference_index = Src.m_data_reference_index;
+				m_base_offset = Src.m_base_offset;
+				m_extent_data = Src.m_extent_data;
+				return *this;
+			}
+			void	Print( CPrintStream& Stream ) const {
+				IMF_UINT32	n = 0;
+				IMF_PRINT( item_ID );
+				IMF_PRINT( data_reference_index );
+				IMF_PRINT( base_offset );
+				for( std::vector<ILOC_EXTENT>::const_iterator i=m_extent_data.begin(); i!=m_extent_data.end(); i++ ) {
+					Stream << "extent_data[" << n++ << "]" << std::endl;
+					Stream << " extent_offset = " << i->m_extent_offset << std::endl;
+					Stream << " extent_length = " << i->m_extent_length << std::endl;
+				}
+			}
+			IMF_UINT16					m_item_ID;
+			IMF_UINT16					m_data_reference_index;
+			IMF_UINT64					m_base_offset;
+			std::vector<ILOC_EXTENT>	m_extent_data;
+		};
+
+		CItemLocationBox( void ) : CFullBox( IMF_FOURCC_ILOC ) { m_offset_size = m_length_size = m_base_offset_size = 0; }
+		bool			Read( CBaseStream& Stream );
+		bool			Write( CBaseStream& Stream ) const;
+		const CItem*	GetItem( IMF_UINT16 ItemID ) const;
+		IMF_INT64		CalcSize( void );
+		void			Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CFullBox::Print( Stream );
+			IMF_PRINT( offset_size );
+			IMF_PRINT( length_size );
+			IMF_PRINT( base_offset_size );
+			for( std::vector<CItem>::const_iterator i=m_items.begin(); i!=m_items.end(); i++ ) {
+				Stream << "items[" << n++ << "]" << std::endl;
+				Stream.Indent( 1 );
+				i->Print( Stream );
+				Stream.Indent( -1 );
+			}
+		}
+
+		IMF_UINT8			m_offset_size;
+		IMF_UINT8			m_length_size;
+		IMF_UINT8			m_base_offset_size;
+		std::vector<CItem>	m_items;
+	protected:
+		bool	ReadValue( CBaseStream& Stream, IMF_UINT8 Size, IMF_UINT64& Value );
+		bool	WriteValue( CBaseStream& Stream, IMF_UINT8 Size, IMF_UINT64 Value ) const;
+	};
+
+	//////////////////////////////////////////////////////////////////////
+	//                    CItemProtectionBox (ipro)                     //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                 CProtectionSchemeInfoBox (sinf)                  //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                    COriginalFormatBox (frma)                     //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                       CIPMPInfoBox (imif)                        //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                      CSchemeTypeBox (schm)                       //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                   CSchemeInformationBox (schi)                   //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                    CItemInfoBox class (iinf)                     //
+	//////////////////////////////////////////////////////////////////////
+	struct	CItemInfoBox : public CFullBox {
+		CItemInfoBox( void ) : CFullBox( IMF_FOURCC_IINF ) {}
+		bool		Read( CBaseStream& Stream );
+		bool		Write( CBaseStream& Stream ) const;
+		IMF_INT64	CalcSize( void );
+		void		Out( std::ostream& Stream, IMF_UINT16 Indent ) const {
+			CFullBox::Out( Stream, Indent );
+			for( CBoxVector::const_iterator i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) (*i)->Out( Stream, Indent+1 );
+		}
+		void		Dump( std::ostream& Stream, IMF_UINT16 Indent, IMF_UINT64 MaxLen = 0 ) const {
+			CFullBox::Dump( Stream, Indent, MaxLen );
+			for( CBoxVector::const_iterator i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) (*i)->Dump( Stream, Indent+1, MaxLen );
+		}
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			Stream.Indent( 1 );
+			for( CBoxVector::const_iterator i=m_Boxes.begin(); i!=m_Boxes.end(); i++ ) (*i)->Print( Stream );
+			Stream.Indent( -1 );
+		}
+		CBox*		GetNextChild( CBox* pLast ) { return m_Boxes.GetNext( pLast ); }
+		CBoxVector	m_Boxes;
+	};
+
+	//////////////////////////////////////////////////////////////////////
+	//                   CItemInfoEntry class (infe)                    //
+	//////////////////////////////////////////////////////////////////////
+	struct	CItemInfoEntry : public CFullBox {
+		CItemInfoEntry( IMF_UINT8 version );
+		bool		Read( CBaseStream& Stream );
+		bool		Write( CBaseStream& Stream ) const;
+		IMF_INT64	CalcSize( void );
+		void		Print( CPrintStream& Stream ) const {
+			IMF_UINT32	n = 0;
+			CFullBox::Print( Stream );
+			IMF_PRINT( item_ID );
+			IMF_PRINT( item_protection_index );
+			IMF_PRINT( item_name );
+			IMF_PRINT( content_type );
+			IMF_PRINT( content_encoding );
+			IMF_PRINT( content_location );
+			IMF_PRINT( content_MD5 );
+			IMF_PRINT( content_length );
+			IMF_PRINT( transfer_length );
+			for( std::vector<IMF_UINT32>::const_iterator i=m_group_id.begin(); i!=m_group_id.end(); i++ ) {
+				Stream << "group_id[" << n++ << "] = " << *i << std::endl;
+			}
+		}
+		IMF_UINT16	m_item_ID;
+		IMF_UINT16	m_item_protection_index;
+		std::string	m_item_name;
+		std::string	m_content_type;
+		std::string	m_content_encoding;
+		std::string	m_content_location;
+		std::string	m_content_MD5;
+		IMF_UINT32	m_content_length;
+		IMF_UINT32	m_transfer_length;
+		std::vector<IMF_UINT32>	m_group_id;
+	};
+
+	//////////////////////////////////////////////////////////////////////
+	//                       CXMLBox class (xml )                       //
+	//////////////////////////////////////////////////////////////////////
+	struct	CXMLBox : public CFullBox {
+		CXMLBox( void ) : CFullBox( IMF_FOURCC_XML ) {}
+		bool		Read( CBaseStream& Stream );
+		bool		Write( CBaseStream& Stream ) const;
+		IMF_INT64	CalcSize( void ) { return SetDataSize( m_xml.length() + 1 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( xml );
+		}
+		std::string	m_xml;
+	};
+
+	//////////////////////////////////////////////////////////////////////
+	//                    CBinaryXMLBox class (bxml)                    //
+	//////////////////////////////////////////////////////////////////////
+	struct	CBinaryXMLBox : public CFullBox {
+		CBinaryXMLBox( void ) : CFullBox( IMF_FOURCC_BXML ), m_data( NULL ) {}
+		virtual	~CBinaryXMLBox( void ) { if ( m_data ) delete[] m_data; }
+		bool	Read( CBaseStream& Stream );
+		bool	Write( CBaseStream& Stream ) const;
+		bool	SetData( const void* pData, IMF_UINT64 Size );
+		IMF_UINT8*	m_data;
+	};
+
+	//////////////////////////////////////////////////////////////////////
+	//                      CPrimaryItemBox (pitm)                      //
+	//////////////////////////////////////////////////////////////////////
+	struct	CPrimaryItemBox : public CFullBox {
+		CPrimaryItemBox( void ) : CFullBox( IMF_FOURCC_PITM ), m_item_ID( 0 ) {}
+		bool	Read( CBaseStream& Stream );
+		bool	Write( CBaseStream& Stream ) const;
+		IMF_INT64	CalcSize( void ) { return SetDataSize( 2 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CFullBox::Print( Stream );
+			IMF_PRINT( item_ID );
+		}
+		IMF_UINT16	m_item_ID;
+	};
+
+	//////////////////////////////////////////////////////////////////////
+	//              CAdditionalMetadataContainerBox (meco)              //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                    CMetaboxRelationBox (mere)                    //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                   CFDItemInformationBox (fiin)                   //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                      CPartitionEntry (paen)                      //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                      CFilePartition (fpar)                       //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                     CFECReservoirBox (fecr)                      //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                    CFDSessionGroupBox (segr)                     //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                     CGroupIdToNameBox (gitn)                     //
+	//////////////////////////////////////////////////////////////////////
+	// ***** to be implemented *****
+
+	//////////////////////////////////////////////////////////////////////
+	//                    CTrackSelectionBox (tsel)                     //
 	//////////////////////////////////////////////////////////////////////
 	// ***** to be implemented *****
 

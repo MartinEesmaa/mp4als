@@ -96,6 +96,16 @@ contents : Header file for encoder.cpp
  *	 - changed type of ChPos to unsigned short*
  *   - added SetRAmode(), SetCRC()
  *
+ * 05/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - supported 64-bit data size.
+ *   - replaced FILE* with HALSSTREAM.
+ *   - revised OpenInputFile() and OpenOutputFile().
+ *   - added SetInputStream() and SetOutputStream().
+ *
+ * 07/15/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added oafi_flag member variable in CLpacEncoder class.
+ *   - added oafi parameter to OpenOutputFile() and SetOutputFile().
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -104,16 +114,7 @@ contents : Header file for encoder.cpp
 #include "floating.h"
 #include "mcc.h"
 #include "lms.h"
-
-// Type definition of 64-bit integer
-#ifdef WIN32
-	typedef	__int64				INT64;
-	typedef	unsigned __int64	UINT64;
-#else
-	#include <stdint.h>
-	typedef	int64_t				INT64;
-	typedef	uint64_t			UINT64;
-#endif
+#include "stream.h"
 
 class CLpacEncoder
 {
@@ -143,15 +144,15 @@ protected:
 	short Res;						// Actual resolution (in bits)
 	short IntRes;					// Integer resolution (in bits)
 	unsigned char SampleType;		// Sample type (0 = integer, 1 = float)
-	unsigned long Samples;			// Number of samples (per channel)
+	ALS_INT64 Samples;				// Number of samples (per channel)
 	long Freq;						// Sampling frequency
-	unsigned long HeaderSize;		// Length of file header (in bytes)
-	unsigned long TrailerSize;		// Number of trailing non-audio bytes
+	ALS_INT64 HeaderSize;			// Length of file header (in bytes)
+	ALS_INT64 TrailerSize;			// Number of trailing non-audio bytes
 
-	long frames;					// Number of frames
-	long fid;						// Current frame
+	ALS_INT64 frames;				// Number of frames
+	ALS_INT64 fid;					// Current frame
 	long N0;						// Length of last frame
-	unsigned long CRC;				// 32-bit CRC
+	unsigned int CRC;				// 32-bit CRC
 	short Q;						// Quantizer value
 
 	short CPE, SCE;
@@ -167,15 +168,19 @@ protected:
 	short CRCenabled;				// CRC enabled
 	long RAUnits;					// number of random access units
 	long RAUid;						// current RAU
-	unsigned long *RAUsize;			// sizes of RAUs
+	unsigned int *RAUsize;			// sizes of RAUs
 
-	long FilePos;					// file position pointer
+	ALS_INT64 FilePos;				// file position pointer
 
-	FILE *fpInput;					// Input file
-	FILE *fpOutput;					// Output file
+	HALSSTREAM fpInput;				// Input file
+	HALSSTREAM fpOutput;			// Output file
+	bool CloseInput;				// true:Need to close fpInput.
+	bool CloseOutput;				// true:Need to close fpOutput.
+	bool mp4file;					// true:MP4 file format / false:ALS file format
+	bool oafi_flag;					// true:Use oafi / false:Do not use oafi
 
 	unsigned char *bbuf, *buff, *tmpbuf1, *tmpbuf2, *tmpbuf3, *buffer[6], **tmpbuf_MCC, *buffer_m;
-	long **x, **xp, **xs, **xps, *d, *cof;
+	int **x, **xp, **xs, **xps, *d, *cof;
 	double *par;
 
 	CFloat Float;					// Floating point class
@@ -193,15 +198,17 @@ public:
 
 	short CloseFiles();
 	short EncodeFrame();			// Encode one frame
-	void GetFilePositions(long *SizeIn, long *SizeOut);	// Current file pointer positions
+	void GetFilePositions(ALS_INT64 *SizeIn, ALS_INT64 *SizeOut);	// Current file pointer positions
 
-	short OpenInputFile(const char *name);
+	short OpenInputFile( const char *name ) { CloseInput = ( OpenFileReader( name, &fpInput ) == 0 ); return CloseInput ? 0 : 1; }
+	short SetInputFile( HALSSTREAM hStream ) { fpInput = hStream; CloseInput = false; return 0; }
 	short AnalyseInputFile(AUDIOINFO *ainfo);
 	short SpecifyAudioInfo(AUDIOINFO *ainfo);
-	short OpenOutputFile(const char *name);
-	long WriteHeader(ENCINFO *encinfo);
-	long WriteTrailer();
-	long EncodeAll();
+	short OpenOutputFile( const char *name, bool mp4, bool oafi ) { mp4file = mp4; oafi_flag = oafi; CloseOutput = ( OpenFileWriter( name, &fpOutput ) == 0 ); return CloseOutput ? 0 : 1; }
+	short SetOutputFile( HALSSTREAM hStream, bool mp4, bool oafi ) { mp4file = mp4; oafi_flag = oafi; fpOutput = hStream; CloseOutput = false; return 0; }
+	ALS_INT64 WriteHeader(ENCINFO *encinfo);
+	ALS_INT64 WriteTrailer();
+	short EncodeAll();
 
 	long SetFrameLength(long N);
 	short SetOrder(short P);
@@ -220,8 +227,8 @@ public:
 	short SetWordlength(short Res);
 	long SetFrequency(long Freq);
 	short SetMSBfirst(short MSBfirst);
-	unsigned long SetHeaderSize(unsigned long HeaderSize);
-	unsigned long SetTrailerSize(unsigned long TrailerSize);
+	ALS_INT64 SetHeaderSize(ALS_INT64 HeaderSize);
+	ALS_INT64 SetTrailerSize(ALS_INT64 TrailerSize);
 	long SetChanSort(long ChanSort, unsigned short *ChPos);
 	short SetPITCH(short PITCH);
 	short SetSub(short Sub_x);
@@ -231,8 +238,8 @@ public:
 	short SetCRC(short CRCenabled);
 
 protected:
-	long EncodeBlock(long *x, unsigned char *bytebuf);		// Encode block
-	void EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, long *d); //MCC
-	long EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, long *x, unsigned char *bytebuf, long gmod); //MCC
-	void LTPanalysis(MCC_ENC_BUFFER *pBuffer, long Channel, long N, short optP, long *x);
+	long EncodeBlock(int *x, unsigned char *bytebuf);		// Encode block
+	void EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, int *d); //MCC
+	long EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, int *x, unsigned char *bytebuf, long gmod); //MCC
+	void LTPanalysis(MCC_ENC_BUFFER *pBuffer, long Channel, long N, short optP, int *x);
 };

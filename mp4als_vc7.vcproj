@@ -22,7 +22,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="4"
 				AdditionalIncludeDirectories="src/AlsImf;src/AlsImf/Mp4"
-				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;WARN_BUFFERSIZEDB_OVER_24BIT;PERMIT_SAMPLERATE_OVER_16BIT"
+				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;WARN_BUFFERSIZEDB_OVER_24BIT;PERMIT_SAMPLERATE_OVER_16BIT;LPC_ADAPT"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="5"
 				UsePrecompiledHeader="2"
@@ -38,14 +38,14 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="libcd.lib odbc32.lib odbccp32.lib lib/win/lpc_adapt.obj"
-				OutputFile="bin/win/Debug/mp4alsRM18.exe"
+				AdditionalDependencies="lib/win/lpc_adapt_vc7_win32_debug.obj"
+				OutputFile="bin/win/Debug/mp4alsRM22rev2.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
 				IgnoreAllDefaultLibraries="FALSE"
-				IgnoreDefaultLibraryNames="libc.lib"
+				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="TRUE"
-				ProgramDatabaseFile="./Debug/mp4alsRM18.pdb"
+				ProgramDatabaseFile="./Debug/mp4alsRM22rev2.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
@@ -86,7 +86,7 @@
 				Optimization="2"
 				InlineFunctionExpansion="1"
 				AdditionalIncludeDirectories="src/AlsImf;src/AlsImf/Mp4"
-				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;WARN_BUFFERSIZEDB_OVER_24BIT;PERMIT_SAMPLERATE_OVER_16BIT"
+				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;WARN_BUFFERSIZEDB_OVER_24BIT;PERMIT_SAMPLERATE_OVER_16BIT;LPC_ADAPT"
 				StringPooling="TRUE"
 				RuntimeLibrary="4"
 				EnableFunctionLevelLinking="TRUE"
@@ -102,11 +102,11 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib lib/win/lpc_adapt.obj"
-				OutputFile="bin/win/Release/mp4alsRM18.exe"
+				AdditionalDependencies="lib/win/lpc_adapt_vc7_win32_release.obj"
+				OutputFile="bin/win/Release/mp4alsRM22rev2.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
-				ProgramDatabaseFile="./Release/mp4alsRM18.pdb"
+				ProgramDatabaseFile="./Release/mp4alsRM22rev2.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
@@ -392,6 +392,9 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath=".\src\stream.cpp">
+			</File>
+			<File
 				RelativePath="src\wave.cpp">
 				<FileConfiguration
 					Name="Debug|Win32">
@@ -460,6 +463,9 @@
 				RelativePath="src\rn_bitio.h">
 			</File>
 			<File
+				RelativePath=".\src\stream.h">
+			</File>
+			<File
 				RelativePath="src\wave.h">
 			</File>
 		</Filter>
@@ -473,12 +479,6 @@
 				RelativePath=".\src\AlsImf\ImfBox.h">
 			</File>
 			<File
-				RelativePath=".\src\AlsImf\ImfBoxAmd1.cpp">
-			</File>
-			<File
-				RelativePath=".\src\AlsImf\ImfBoxAmd1.h">
-			</File>
-			<File
 				RelativePath=".\src\AlsImf\ImfDescriptor.cpp">
 			</File>
 			<File
@@ -489,6 +489,12 @@
 			</File>
 			<File
 				RelativePath=".\src\AlsImf\ImfFileStream.h">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfPrintStream.cpp">
+			</File>
+			<File
+				RelativePath=".\src\AlsImf\ImfPrintStream.h">
 			</File>
 			<File
 				RelativePath=".\src\AlsImf\ImfSampleEntry.cpp">

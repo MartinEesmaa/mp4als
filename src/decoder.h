@@ -78,8 +78,13 @@ contents : Header file for decoder.cpp
  * 06/08/2005, Tilman Liebchen <liebchen@nue.tu-berlin.de>
  *   - added AUXenabled
  *
+ * 05/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - supported 64-bit data size.
+ *   - replaced FILE* with HALSSTREAM.
+ *   - revised OpenInputFile() and OpenOutputFile().
+ *   - added SetInputStream() and SetOutputStream().
+ *
  ************************************************************************/
-
 
 #include <stdio.h>
 
@@ -87,6 +92,8 @@ contents : Header file for decoder.cpp
 #include "floating.h"
 #include "mcc.h"
 #include "lms.h"
+#include "stream.h"
+#include "als2mp4.h"
 
 class CLpacDecoder
 {
@@ -112,15 +119,16 @@ protected:
 	short Res;				// Actual resolution (in bits)
 	short IntRes;			// Integer resolution (in bits)
 	unsigned char SampleType;	// Sample type (0=int, 1=float)
-	unsigned long Samples;	// Number of samples (per channel)
+	ALS_INT64 Samples;		// Number of samples (per channel)
 	long Freq;				// Sampling frequency
-	unsigned long HeaderSize;	// Length of file header (in bytes)
-	unsigned long TrailerSize;	// Number of trailing non-audio bytes
+	ALS_INT64 HeaderSize;	// Length of file header (in bytes)
+	ALS_INT64 TrailerSize;	// Number of trailing non-audio bytes
+	ALS_INT64 TrailerOffset;	// Trailer offset
 
-	long frames;			// Number of frames
-	long fid;				// Current frame
+	ALS_INT64 frames;			// Number of frames
+	ALS_INT64 fid;				// Current frame
 	long N0;				// Length of last frame
-	unsigned long CRC;		// 32-bit CRC
+	unsigned int CRC;		// 32-bit CRC
 	short Q;				// Quantizer value
 	long ChanSort;			// Rearrange Channels
 	unsigned short *ChPos;	// Channel Positions
@@ -133,15 +141,18 @@ protected:
 	short CRCenabled;		// CRC enabled
 	long RAUnits;			// number of random access units
 	long RAUid;				// current RAU
-	unsigned long *RAUsize;	// sizes of RAUs
-	unsigned long CRCorg;	// original (transmitted) CRC value
+	unsigned int *RAUsize;	// sizes of RAUs
+	unsigned int CRCorg;	// original (transmitted) CRC value
 	short AUXenabled;		// AUX data present
 
-	FILE *fpInput;			// Input file
-	FILE *fpOutput;			// Output file
+	HALSSTREAM	fpInput;		// Input file
+	HALSSTREAM	fpOutput;		// Output file
+	bool		CloseInput;		// true: Need to close fpInput.
+	bool		CloseOutput;	// true: Need to close fpOutput.
+	bool		mp4file;		// true:MP4 file format / false:ALS file format
 
-	unsigned char *bbuf, *tmpbuf, *buff;
-	long **x, **xp, **xs, **xps, *d, *cofQ;
+	unsigned char *bbuf, *tmpbuf;
+	int **x, **xp, **xs, **xps, *d, *cofQ;
 
 	CFloat			Float;		// Floating point class
 	MCC_DEC_BUFFER	MccBuf;		// Buffer for multi-channel correlation
@@ -156,20 +167,24 @@ public:
 	CLpacDecoder();				// Constructor
 	~CLpacDecoder();			// Destructor
 	short CloseFiles();
-	short OpenInputFile(const char *name);
-	short AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo);
-	short OpenOutputFile(const char *name);
-	long WriteHeader();
-	long WriteTrailer();
-	long DecodeAll();
+	short OpenInputFile( const char *name, bool mp4 ) { mp4file = mp4; CloseInput = ( OpenFileReader( name, &fpInput ) == 0 ); return CloseInput ? 0 : 1; }
+	short SetInputStream( HALSSTREAM hStream, bool mp4 ) { mp4file = mp4; fpInput = hStream; CloseInput = false; return 0; }
+	short AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo, const MP4INFO& Mp4Info);
+	short OpenOutputFile( const char *name ) { CloseOutput = ( OpenFileWriter( name, &fpOutput ) == 0 ); return CloseOutput ? 0 : 1; }
+	short SetOutputStream( HALSSTREAM hStream ) { fpOutput = hStream; CloseOutput = false; return 0; }
+	ALS_INT64 WriteHeader( const MP4INFO& Mp4Info );
+	ALS_INT64 WriteTrailer( const MP4INFO& Mp4Info );
+	short DecodeAll( const MP4INFO& Mp4Info );
 	short DecodeFrame();		// Decode one frame
-	unsigned long GetCRC();
+	unsigned int GetCRC();
 
 protected:
-	short DecodeBlock(long *x, long Nb, short ra);			// Decode one block
+	short DecodeBlock(int *x, long Nb, short ra);			// Decode one block
 	void  DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, long Nb, short ra);
-	short DecodeBlockReconstruct(MCC_DEC_BUFFER *pBuffer, long Channel, long *x, long Nb, short ra);
+	short DecodeBlockReconstruct(MCC_DEC_BUFFER *pBuffer, long Channel, int *x, long Nb, short ra);
 	void  DecodeBlockParameterRLSLMS(MCC_DEC_BUFFER *pBuffer, long Channel);
-	short DecodeBlockReconstructRLSLMS(MCC_DEC_BUFFER *pBuffer, long Channel, long *x);
+	short DecodeBlockReconstructRLSLMS(MCC_DEC_BUFFER *pBuffer, long Channel, int *x);
+	bool CopyData( const char* pFilename, ALS_UINT64 Offset, ALS_UINT64 Size, HALSSTREAM hOutFile );
+	bool CopyData( HALSSTREAM hInFile, ALS_UINT64 Size, HALSSTREAM hOutFile );
 };
 

@@ -21,6 +21,24 @@
  *  - removed unused members from MP4OPT structure.
  *  - replaced libisomediafile with AlsImf library.
  *
+ * May 23, 2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *  - modified ALS_HEADER structure.
+ *  - added some error codes.
+ *  - changed MP4OPT to MP4INFO with some members added.
+ *  - added Set32().
+ *  - added CCopyData class.
+ *
+ * Jun 4, 2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *  - modified CCopyData constructer to accept a negative offset value.
+ *
+ * Jun 11, 2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *  - changed const MP4INFO& to MP4INFO& in AlsToMp4() and 
+ *    ReadAlsHeaderFromStream().
+ *
+ * Jul 15, 2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *  - added m_UseMeta in MP4INFO structure.
+ *  - added CCopyData::CCopyData() with 1 parameter.
+ *
  ************************************************************************/
 
 #if !defined( ALS2MP4_INCLUDED )
@@ -35,9 +53,9 @@
 typedef	struct tagALS_HEADER {
 	NAlsImf::IMF_UINT32		m_als_id;
 	NAlsImf::IMF_UINT32		m_Freq;
-	NAlsImf::IMF_UINT32		m_Samples;
+	NAlsImf::IMF_UINT64		m_Samples;
 	NAlsImf::IMF_UINT32		m_Chan;
-	NAlsImf::IMF_INT16		m_FileType;
+	NAlsImf::IMF_UINT8		m_FileType;
 	NAlsImf::IMF_INT16		m_Res;
 	NAlsImf::IMF_INT16		m_SampleType;
 	NAlsImf::IMF_INT16		m_MSBfirst;
@@ -59,17 +77,20 @@ typedef	struct tagALS_HEADER {
 	NAlsImf::IMF_INT16		m_RLSLMS;
 	NAlsImf::IMF_INT16		m_AUXenabled;
 	NAlsImf::IMF_UINT32		m_HeaderSize;
+	NAlsImf::IMF_UINT8*		m_pHeaderData;	// Must be initialized with NULL.
 	NAlsImf::IMF_UINT32		m_TrailerSize;
-	NAlsImf::IMF_UINT8*		m_buff;			// Must be initialized with NULL.
+	NAlsImf::IMF_UINT8*		m_pTrailerData;	// Must be initialized with NULL.
 	NAlsImf::IMF_UINT32		m_CRCorg;
 	NAlsImf::IMF_UINT32*	m_RAUsize;		// Must be initialized with NULL.
 	NAlsImf::IMF_UINT32		m_AuxSize;
-	NAlsImf::IMF_UINT8*		m_AuxData;		// Must be initialized with NULL.
+	NAlsImf::IMF_UINT8*		m_pAuxData;		// Must be initialized with NULL.
 	// Below are calculated variables.
 	NAlsImf::IMF_INT32		m_frames;
 	NAlsImf::IMF_UINT32		m_RAUnits;
-	NAlsImf::IMF_UINT32		m_FileSize;
+	NAlsImf::IMF_INT64		m_FileSize;
 	NAlsImf::IMF_UINT32		m_AlsHeaderSize;
+	NAlsImf::IMF_UINT32		m_ALSSpecificConfigSize;
+	NAlsImf::IMF_UINT8*		m_pALSSpecificConfig;	// Must be initialized with NULL.
 } ALS_HEADER;
 
 //////////////////////////////////////////////////////////////////////
@@ -93,27 +114,68 @@ enum A2MERR {
 	A2MERR_MAX_SIZE,			// Failed to get maximum sample size.
 	A2MERR_NO_FRAMEINFO,		// No frame information found.
 	A2MERR_NO_RAU_SIZE,			// No random access unit size.
+	A2MERR_WRITE_ALSHEADER,		// Failed to write ALS header.
+	A2MERR_WRITE_HEADER,		// Failed to write header data.
+	A2MERR_WRITE_TRAILER,		// Failed to write trailer data.
+	A2MERR_WRITE_AUXDATA,		// Failed to write auxiliary data.
+	A2MERR_HEADER_TOO_BIG,		// Header is too big for ALS format.
+	A2MERR_TRAILER_TOO_BIG,		// Trailer is too big for ALS format.
+	A2MERR_AUXDATA_TOO_BIG,		// Auxiliary data is too big for ALS format.
+	A2MERR_RAU_TOO_BIG,			// Random access unit is too big.
 };
 
 //////////////////////////////////////////////////////////////////////
-//                         Option structure                         //
+//                    MP4 information structure                     //
 //////////////////////////////////////////////////////////////////////
-typedef	struct tagMP4OPT {
-	bool		m_StripRaInfo;		// true:Strip RA info / false:Do not strip RA info
-	short		m_RaLocation;		// RAU size location: 0=frames, 1=header, 2=none
-	const char*	m_pInFile;			// Input filename
-	const char*	m_pOutFile;			// Output filename
-} MP4OPT;
+typedef	struct tagMP4INFO {
+	bool				m_StripRaInfo;		// true:Strip RA info / false:Do not strip RA info
+	short				m_RaLocation;		// RAU size location: 0=frames, 1=header, 2=none
+	const char*			m_pInFile;			// Input filename
+	const char*			m_pOutFile;			// Output filename
+	const char*			m_pOriginalFile;	// Filename which has original header and trailer
+	NAlsImf::IMF_UINT64	m_Samples;			// Number of samples
+	NAlsImf::IMF_UINT64	m_HeaderSize;		// Header size in bytes
+	NAlsImf::IMF_UINT64	m_HeaderOffset;		// Header offset
+	NAlsImf::IMF_UINT64	m_TrailerSize;		// Trailer size in bytes
+	NAlsImf::IMF_UINT64	m_TrailerOffset;	// Trailer offset
+	NAlsImf::IMF_UINT64	m_AuxDataSize;		// Auxiliary data size in bytes
+	NAlsImf::IMF_UINT64	m_AuxDataOffset;	// Auxiliary data offset
+	NAlsImf::IMF_UINT8	m_FileType;			// Original file type
+	std::string			m_FileTypeName;		// MIME type
+	bool				m_RMflag;			// true:Used in mp4alsRM / false:Used in als2mp4
+	bool				m_UseMeta;			// true:Use meta box / false:Do not use meta box
+} MP4INFO;
 
 //////////////////////////////////////////////////////////////////////
 //                      Prototype declaration                       //
 //////////////////////////////////////////////////////////////////////
-const char*	ToErrorString( A2MERR ErrCode );
-void		ReadAlsHeaderFromStream( NAlsImf::CBaseStream& Stream, ALS_HEADER* pHeader );
-void		ReadAlsHeaderFromMemory( const NAlsImf::IMF_UINT8* pData, NAlsImf::IMF_UINT32 DataSize, ALS_HEADER* pHeader );
-void		ClearAlsHeader( ALS_HEADER* pHeader );
-A2MERR		AlsToMp4( const MP4OPT& Opt );
-A2MERR		Mp4ToAls( const MP4OPT& Opt );
+const char*			ToErrorString( A2MERR ErrCode );
+void				ReadAlsHeaderFromStream( NAlsImf::CBaseStream& Stream, ALS_HEADER* pHeader, MP4INFO& Mp4Info );
+void				ReadAlsHeaderFromMemory( const NAlsImf::IMF_UINT8* pData, NAlsImf::IMF_UINT32 DataSize, ALS_HEADER* pHeader, const MP4INFO& Mp4Info );
+void				ClearAlsHeader( ALS_HEADER* pHeader );
+A2MERR				AlsToMp4( MP4INFO& Mp4Info );
+A2MERR				Mp4ToAls( MP4INFO& Mp4Info );
+void				Set32( void* pDst, NAlsImf::IMF_UINT32 Value );
+
+//////////////////////////////////////////////////////////////////////
+//                         CCopyData class                          //
+//////////////////////////////////////////////////////////////////////
+class	CCopyData {
+public:
+	CCopyData( NAlsImf::CBaseStream& InFile, NAlsImf::IMF_INT64 Offset, NAlsImf::IMF_UINT64 Size );
+	CCopyData( const char* pFilename, NAlsImf::IMF_INT64 Offset, NAlsImf::IMF_UINT64 Size );
+	CCopyData( NAlsImf::IMF_UINT64 Size );
+	virtual	~CCopyData( void ) { m_Reader.Close(); if ( m_pBuffer ) delete[] m_pBuffer; }
+	bool	Read( NAlsImf::IMF_UINT32& Size );
+	operator const void* ( void ) const { return m_pBuffer; }
+	operator void* ( void ) { return m_pBuffer; }
+protected:
+	NAlsImf::CBaseStream*	m_pInFile;
+	NAlsImf::CFileReader	m_Reader;
+	NAlsImf::IMF_UINT8*		m_pBuffer;
+	NAlsImf::IMF_UINT64		m_TotalSize;
+	static	const NAlsImf::IMF_UINT32	FILECOPY_BUFFER_SIZE;
+};
 
 #endif	// ALS2MP4_INCLUDED
 

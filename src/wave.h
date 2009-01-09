@@ -58,43 +58,71 @@ contents : Header file for wave.cpp
  * 06/08/2005, Tilman Liebchen <liebchen@nue.tu-berlin.de>
  *   - changed ENCINFO structure
  *
+ * 05/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - supported 64-bit data size.
+ *   - replaced FILE* with HALSSTREAM to use functions in stream.cpp.
+ *
+ * 05/14/2008, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added ValidBitsPerSample to WAVEFORMATPCM structure.
+ *   - modified WAVEFILEHEADER definition.
+ *   - added ReadWaveFormat().
+ *
  *************************************************************************/
 
 #ifndef _INC_WAVE_H
 #define _INC_WAVE_H
 
 #include <stdio.h>
+#include "stream.h"
 
 typedef unsigned char BYTE;
 typedef unsigned short USHORT;
-typedef unsigned long ULONG;
+typedef unsigned int UINT;
+
+#if defined( _MSC_VER )
+#define PACKED
+#pragma pack( push, 1 )
+#elif defined( __GNUG__ )
+#define PACKED __attribute__ ((packed))
+#endif
 
 typedef struct
 {
-	USHORT	FormatTag;		// WAVE_FORMAT_PCM = 1, WAVE_FORMAT_IEEE_FLOAT = 3
-	USHORT	Channels;		// Mono = 1, Stereo = 2, Multichannel > 2 (undefined channel mapping)
-	ULONG	SamplesPerSec;	// Sampling frequency (in Hz)
-	ULONG	AvgBytesPerSec;	// Bytes per second (SampPerSec * BlockAlign)
-	USHORT	BlockAlign;		// Bytes per sample step (1...4 * Channels)
-	USHORT	BitsPerSample;	// Bits per sample (typically 8, 16, 24 or 32)
+	USHORT	FormatTag			PACKED;	// WAVE_FORMAT_PCM = 1, WAVE_FORMAT_IEEE_FLOAT = 3
+	USHORT	Channels			PACKED;	// Mono = 1, Stereo = 2, Multichannel > 2 (undefined channel mapping)
+	UINT	SamplesPerSec		PACKED;	// Sampling frequency (in Hz)
+	UINT	AvgBytesPerSec		PACKED;	// Bytes per second (SampPerSec * BlockAlign)
+	USHORT	BlockAlign			PACKED;	// Bytes per sample step (1...4 * Channels)
+	USHORT	BitsPerSample		PACKED;	// Bits per sample (typically 8, 16, 24 or 32)
+	USHORT	ValidBitsPerSample	PACKED;	// Valid bits per sample
 } WAVEFORMATPCM;
 
 typedef struct
 {
-	char	RiffChunk[4];		// "RIFF"
-	ULONG	RiffLen;			// Length of following file data (file length - 8)
-	char	WaveChunk[4];		// "WAVE"
-	char	FormChunk[4];		// "fmt "
-	ULONG	FormLen;			// Length of format chunk (typically 16)
-	WAVEFORMATPCM	wf;			// format chunk
-	char	DataChunk[4];		// "data"
-	ULONG	DataLen;			// Length of data chunk
+	char	RiffChunk[4]	PACKED;		// "RIFF"
+	UINT	RiffLen			PACKED;		// Length of following file data (file length - 8)
+	char	WaveChunk[4]	PACKED;		// "WAVE"
+	char	FormChunk[4]	PACKED;		// "fmt "
+	UINT	FormLen			PACKED;		// Length of format chunk (typically 16)
+	USHORT	FormatTag		PACKED;		// Format tag
+	USHORT	Channels		PACKED;		// Number of channels
+	UINT	SamplesPerSec	PACKED;		// Sampling frequency
+	UINT	AvgBytesPerSec	PACKED;		// Bytes per second
+	USHORT	BlockAlign		PACKED;		// Bytes per sample step
+	USHORT	BitsPerSample	PACKED;		// Bits per sample
+	char	DataChunk[4]	PACKED;		// "data"
+	UINT	DataLen			PACKED;		// Length of data chunk
 } WAVEFILEHEADER;
+
+#if defined( _MSC_VER )
+#pragma pack( pop )
+#endif
+#undef PACKED
 
 typedef struct
 {
 	long		Channels;		// Number of channels
-	ULONG		SampleFrames;	// Samples per channel
+	UINT		SampleFrames;	// Samples per channel
 	short		SampleSize;		// Bits per sample
 	BYTE		SampleRate[10];	// Sampling frequency (in Hz)
 } AIFFCOMMON;
@@ -102,29 +130,29 @@ typedef struct
 typedef struct
 {
 	char	FormChunk[4];		// "FORM"
-	ULONG	FormLen;			// Length of following file data (file length - 8)
+	UINT	FormLen;			// Length of following file data (file length - 8)
 	char	AiffChunk[4];		// "AIFF"
 	char	CommChunk[4];		// "COMM"
-	ULONG	CommLen;			// Length of common chunk (typically 16)
+	UINT	CommLen;			// Length of common chunk (typically 16)
 	AIFFCOMMON	ac;				// common chunk
 	char	SsndChunk[4];		// "SSND"
-	ULONG	SsndLen;			// Length of sound data chunk
-	ULONG	Offset;
-	ULONG	BlockSize;
+	UINT	SsndLen;			// Length of sound data chunk
+	UINT	Offset;
+	UINT	BlockSize;
 } AIFFFILEHEADER;
 
 typedef struct
 {
-	unsigned char FileType;			// File Type (raw, wave, aiff, ...)
-	unsigned char MSBfirst;			// Byte Order (0 = LSB first, 1 = MSB first)
-	unsigned short Chan;			// Number of Channels
-	unsigned short Res;				// Actual resolution in Bits (1...32)
-	unsigned short IntRes;			// Integer resolution in Bits
-	unsigned char SampleType;		// Sample type (0=int, 1=float)
-	unsigned long Samples;			// Number of Samples per Channel
-	unsigned long Freq;				// Sample Rate in Hz
-	unsigned long HeaderSize;		// Header Size in Bytes
-	unsigned long TrailerSize;		// Trailer Size in Bytes
+	unsigned char	FileType;		// File Type (raw, wave, aiff, ...)
+	unsigned char	MSBfirst;		// Byte Order (0 = LSB first, 1 = MSB first)
+	unsigned short	Chan;			// Number of Channels
+	unsigned short	Res;			// Actual resolution in Bits (1...32)
+	unsigned short	IntRes;			// Integer resolution in Bits
+	unsigned char	SampleType;		// Sample type (0=int, 1=float)
+	ALS_INT64		Samples;		// Number of Samples per Channel
+	unsigned long	Freq;			// Sample Rate in Hz
+	ALS_INT64		HeaderSize;		// Header Size in Bytes
+	ALS_INT64		TrailerSize;	// Trailer Size in Bytes
 } AUDIOINFO;
 
 typedef struct
@@ -142,19 +170,26 @@ typedef struct
 	unsigned char CRCenabled;
 } ENCINFO;
 
-
 // Functions
-ULONG GetWaveFormatPCM(FILE *wav,WAVEFORMATPCM *wf, ULONG *samples);
-ULONG GetAiffFormat(FILE *aif, AIFFCOMMON *ac, ULONG *Offset, ULONG *BlockSize, ULONG *samplerate);
+ALS_INT64 GetWaveFormatPCM(HALSSTREAM wav,WAVEFORMATPCM *wf, ALS_INT64 *samples);
+short WriteWaveHeaderPCM(HALSSTREAM wav, WAVEFORMATPCM *wf, UINT *samples);
+ALS_INT64 GetAiffFormat(HALSSTREAM aif, AIFFCOMMON *ac, ALS_INT64 *Offset, ALS_INT64 *BlockSize, UINT *samplerate);
+ALS_INT64 GetWave64FormatPCM(HALSSTREAM wav, WAVEFORMATPCM* wf, ALS_INT64* samples);
+ALS_INT64 GetRF64FormatPCM(HALSSTREAM wav, WAVEFORMATPCM* wf, ALS_INT64* samples);
+bool ReadWaveFormat( HALSSTREAM wav, WAVEFORMATPCM* pFmt, ALS_INT64 FmtLen );
 
-void WriteUShortLSBfirst(unsigned short x, FILE *fp);
-void WriteUShortMSBfirst(unsigned short x, FILE *fp);
-unsigned short ReadUShortLSBfirst(FILE *fp);
-unsigned short ReadUShortMSBfirst(FILE *fp);
-void WriteULongLSBfirst(unsigned long x, FILE *fp);
-void WriteULongMSBfirst(unsigned long x, FILE *fp);
-unsigned long ReadULongLSBfirst(FILE *fp);
-unsigned long ReadULongMSBfirst(FILE *fp);
+void WriteUShortLSBfirst(unsigned short x, HALSSTREAM fp);
+void WriteUShortMSBfirst(unsigned short x, HALSSTREAM fp);
+unsigned short ReadUShortLSBfirst(HALSSTREAM fp);
+unsigned short ReadUShortMSBfirst(HALSSTREAM fp);
+void WriteUIntLSBfirst(unsigned int x, HALSSTREAM fp);
+void WriteUIntMSBfirst(unsigned int x, HALSSTREAM fp);
+unsigned int ReadUIntLSBfirst(HALSSTREAM fp);
+unsigned int ReadUIntMSBfirst(HALSSTREAM fp);
+void WriteUINT64LSBfirst(ALS_UINT64 x, HALSSTREAM fp);
+void WriteUINT64MSBfirst(ALS_UINT64 x, HALSSTREAM fp);
+ALS_UINT64 ReadUINT64LSBfirst(HALSSTREAM fp);
+ALS_UINT64 ReadUINT64MSBfirst(HALSSTREAM fp);
 
 #endif	//_INC_WAVE_H
 

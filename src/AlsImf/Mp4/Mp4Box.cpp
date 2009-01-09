@@ -1,45 +1,47 @@
-/******************* MPEG-4 Audio Lossless Coding ******************
- ******************* MPEG-A Audio Archival MAF    ******************
+/***************** MPEG-4 Audio Lossless Coding *********************
 
 This software module was originally developed by
 
 NTT (Nippon Telegraph and Telephone Corporation), Japan
 
-in the course of development of the MPEG-4 Audio standard ISO/IEC 
-14496-3, associated amendments and the ISO/IEC 23000-6: Audio 
-Archival Multimedia Application Format standard.
-This software module is an implementation of a part of one or more 
-MPEG-4 Audio lossless coding tools as specified by the MPEG-4 Audio 
-standard and ISO/IEC 23000-6: Audio Archival Multimedia Application 
-Format tools  as specified by the MPEG-A Requirements.
-ISO/IEC gives users of the MPEG-4 Audio standards and of ISO/IEC 
-23000-6: Audio Archival Multimedia Application Format free license 
-to this software module or modifications thereof for use in hardware 
-or software products claiming conformance to MPEG-4 Audio and MPEG-A.
-Those intending to use this software module in hardware or software 
-products are advised that its use may infringe existing patents. 
-The original developer of this software module and his/her company, 
-the subsequent editors and their companies, and ISO/IEC have no 
-liability for use of this software module or modifications thereof 
-in an implementation.
-Copyright is not released for non MPEG-4 / MPEG-A conforming 
-products. The organizations named above retain full rights to use 
-the code for their own purpose, assign or donate the code to a third 
-party and inhibit third parties from using the code for non MPEG-4 / 
-MPEG-A conforming products.
+in the course of development of the MPEG-4 Audio standard ISO/IEC 14496-3
+and associated amendments. This software module is an implementation of
+a part of one or more MPEG-4 Audio lossless coding tools as specified
+by the MPEG-4 Audio standard. ISO/IEC gives users of the MPEG-4 Audio
+standards free license to this software module or modifications
+thereof for use in hardware or software products claiming conformance
+to the MPEG-4 Audio standards. Those intending to use this software
+module in hardware or software products are advised that this use may
+infringe existing patents. The original developer of this software
+module, the subsequent editors and their companies, and ISO/IEC have
+no liability for use of this software module or modifications thereof
+in an implementation. Copyright is not released for non MPEG-4 Audio
+conforming products. The original developer retains full right to use
+the code for the developer's own purpose, assign or donate the code to
+a third party and to inhibit third party from using the code for non
+MPEG-4 Audio conforming products. This copyright notice must be included
+in all copies or derivative works.
 
 Copyright (c) 2006.
 
-This notice must be included in all copies or derivative works.
-
 Filename : Mp4Box.cpp
-Project  : MPEG-A Audio Archival Multimedia Application Format
+Project  : MPEG-4 Audio Lossless Coding
 Author   : Koichi Sugiura (NTT Advanced Technology Corporation)
            Noboru Harada  (NTT)
 Date     : August 31st, 2006
 Contents : Extension defined in ISO/IEC 14496-14
 
 *******************************************************************/
+
+/******************************************************************
+ *
+ * Modifications:
+ *
+ * 2007/05/10, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - changed oafi box to data box with oafi record.
+ *   - modified the bit-width of file_type in oafi record.
+ *
+ ******************************************************************/
 
 #include	"Mp4Box.h"
 
@@ -63,7 +65,7 @@ CBox*	CMp4BoxReader::CreateBox( IMF_UINT32 Type )
 	switch( Type ) {
 	case	IMF_FOURCC_IODS:	return new CObjectDescriptorBox();
 	case	IMF_FOURCC_ESDS:	return new CESDBox();
-	case	IMF_FOURCC_OAFI:	return new COrigAudioFileInfoBox();
+	case	IMF_FOURCC_DATA:	return new COrigAudioFileInfoBox();
 	}
 	return CBoxReader::CreateBox( Type );
 }
@@ -722,7 +724,128 @@ bool	CMP4AudioSampleEntry::Read( CBaseStream& Stream )
 
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
-//                COrigAudioFileInfoBox class (oafi)                //
+//                  COrigAudioFileInfoRecord class                  //
+//                                                                  //
+//////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////
+//                                    //
+//             operator =             //
+//                                    //
+////////////////////////////////////////
+COrigAudioFileInfoRecord&	COrigAudioFileInfoRecord::operator = ( const COrigAudioFileInfoRecord& Src )
+{
+	if ( &Src != this ) {
+		m_file_type = Src.m_file_type;
+		m_header_item_ID = Src.m_header_item_ID;
+		m_trailer_item_ID = Src.m_trailer_item_ID;
+		m_aux_item_ID = Src.m_aux_item_ID;
+		m_original_MIME_type = Src.m_original_MIME_type;
+	}
+	return *this;
+}
+
+////////////////////////////////////////
+//                                    //
+//                Read                //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// Size = Size of OrigAudioFileInfoRecord in bytes
+// Return value = true:Success / false:Error
+bool	COrigAudioFileInfoRecord::Read( CBaseStream& Stream, IMF_INT64 Size )
+{
+	IMF_UINT8	Tmp;
+
+	if ( !Stream.Read8( Tmp ) ||
+		 !Stream.Read16( m_header_item_ID ) || 
+		 !Stream.Read16( m_trailer_item_ID ) || 
+		 !Stream.Read16( m_aux_item_ID ) ) { SetLastError( E_READ_STREAM ); return false; }
+	m_file_type = ( Tmp >> 4 ) & 0x0f;
+	if ( m_file_type == 0xf ) {
+		if ( !ReadString( Stream, m_original_MIME_type, Size - 7 ) ) return false;
+	}
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//               Write                //
+//                                    //
+////////////////////////////////////////
+// Stream = Output stream
+// Return value = true:Success / false:Error
+bool	COrigAudioFileInfoRecord::Write( CBaseStream& Stream ) const
+{
+	IMF_UINT8	Tmp;
+	IMF_UINT32	OrgMimeLen;
+
+	if ( m_file_type & 0xf0 ) return false;
+	Tmp = m_file_type << 4;
+	if ( !Stream.Write8( Tmp ) || 
+		 !Stream.Write16( m_header_item_ID ) || 
+		 !Stream.Write16( m_trailer_item_ID ) || 
+		 !Stream.Write16( m_aux_item_ID ) ) return false;
+	if ( m_file_type == 0xf ) {
+		OrgMimeLen = static_cast<IMF_UINT32>( m_original_MIME_type.length() ) + 1;
+		if ( Stream.Write( m_original_MIME_type.c_str(), OrgMimeLen ) != OrgMimeLen ) return false;
+	}
+	return true;
+}
+
+////////////////////////////////////////
+//                                    //
+//           Read a string            //
+//                                    //
+////////////////////////////////////////
+// Stream = Input stream
+// String = String object to receive the result
+// MaxLen = Maximum length in bytes, including terminating NULL character
+// Return value = true:Success / false:Error
+bool	COrigAudioFileInfoRecord::ReadString( CBaseStream& Stream, std::string& String, IMF_INT64 MaxLen )
+{
+	bool		Result = false;
+	IMF_UINT32	BufSize, ReadSize, i;
+	char*		pBuf = NULL;
+	IMF_INT64	Pos;
+
+	// Check MaxLen.
+	if ( MaxLen >> 32 ) { SetLastError( E_BOX_STRLEN_OVERFLOW ); return false; }	// MaxLen must be positive and less than 4GB.
+	BufSize = static_cast<IMF_UINT32>( MaxLen );
+
+	// Save the current position.
+	if ( ( Pos = Stream.Tell() ) == -1 ) { SetLastError( E_TELL_STREAM ); return false; }
+
+	// Allocate temporary buffer.
+	pBuf = new char [ BufSize ];
+	if ( pBuf == NULL ) { SetLastError( E_MEMORY ); return false; }
+
+	try {
+		// Read some data.
+		ReadSize = Stream.Read( pBuf, BufSize );
+
+		// Looking for the terminating NULL character.
+		for( i=0; ( i < ReadSize ) && ( pBuf[i] != '\0' ); i++ );
+		if ( i >= ReadSize ) throw E_BOX_STRING_TOO_LONG;
+
+		// Build string object.
+		String.assign( pBuf, i );
+
+		// Seek stream pointer.
+		if ( !Stream.Seek( Pos + i + 1, CBaseStream::S_BEGIN ) ) throw E_SEEK_STREAM;
+		Result = true;
+	}
+	catch( IMF_UINT32 e ) {
+		SetLastError( e );
+		delete[] pBuf;
+	}
+	return Result;
+}
+
+//////////////////////////////////////////////////////////////////////
+//                                                                  //
+//                   COrigAudioFileInfoBox class                    //
+//         ('data' box containing COrigAudioFileInfoRecord)         //
 //                                                                  //
 //////////////////////////////////////////////////////////////////////
 
@@ -735,14 +858,8 @@ bool	CMP4AudioSampleEntry::Read( CBaseStream& Stream )
 // Return value = true:Success / false:Error
 bool	COrigAudioFileInfoBox::Read( CBaseStream& Stream )
 {
-	IMF_UINT8	Tmp;
-
 	if ( !CFullBox::Read( Stream ) ) return false;
-	if ( !Stream.Read8( Tmp ) ||
-		 !Stream.Read16( m_header_item_ID ) || 
-		 !Stream.Read16( m_trailer_item_ID ) || 
-		 !Stream.Read16( m_aux_item_ID ) ) { SetLastError( E_READ_STREAM ); return false; }
-	m_file_type = ( Tmp >> 5 ) & 0x07;
+	if ( !m_oafi.Read( Stream, GetDataSize() ) ) { SetLastError( m_oafi.GetLastError() ); return false; }
 	if ( CheckReadSize( Stream ) != 0 ) { SetLastError( E_BOX_SIZE ); return false; }
 	return true;
 }
@@ -756,15 +873,8 @@ bool	COrigAudioFileInfoBox::Read( CBaseStream& Stream )
 // Return value = true:Success / false:Error
 bool	COrigAudioFileInfoBox::Write( CBaseStream& Stream ) const
 {
-	IMF_UINT8	Tmp;
-
 	if ( !CFullBox::Write( Stream ) ) return false;
-	if ( m_file_type & 0xf8 ) return false;
-	Tmp = m_file_type << 5;
-	if ( !Stream.Write8( Tmp ) || 
-		 !Stream.Write16( m_header_item_ID ) || 
-		 !Stream.Write16( m_trailer_item_ID ) || 
-		 !Stream.Write16( m_aux_item_ID ) ) return false;
+	if ( !m_oafi.Write( Stream ) ) return false;
 	return true;
 }
 

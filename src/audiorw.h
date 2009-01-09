@@ -46,14 +46,19 @@ contents : Header file for audiorw.cpp
  * 11/22/2004, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
  *   - removed unnecessary parameters from ReadFloatNM().
  *
+ * 05/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - replaced FILE* with HALSSTREAM.
+ *
  *************************************************************************/
 
-long Read8BitOffsetNM(long **x, long M, long N, unsigned char *b, FILE *fp);
-long Write8BitOffsetNM(long **x, long M, long N, unsigned char *b, FILE *fp);
-long Read16BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp);
-long Write16BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp);
-long Read24BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp);
-long Write24BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp);
-long Read32BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp);
-long Write32BitNM(long **x, long M, long N, short msbfirst, unsigned char *b, FILE *fp);
-long ReadFloatNM( long** ppLongBuf, long M, long N, short msbfirst, unsigned char* b, FILE* fp, float** ppFloatBuf );
+#include	"stream.h"
+
+long Read8BitOffsetNM(int **x, long M, long N, unsigned char *b, HALSSTREAM fp);
+long Write8BitOffsetNM(int **x, long M, long N, unsigned char *b, HALSSTREAM fp);
+long Read16BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp);
+long Write16BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp);
+long Read24BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp);
+long Write24BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp);
+long Read32BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp);
+long Write32BitNM(int **x, long M, long N, short msbfirst, unsigned char *b, HALSSTREAM fp);
+long ReadFloatNM( int** ppLongBuf, long M, long N, short msbfirst, unsigned char* b, HALSSTREAM fp, float** ppFloatBuf );

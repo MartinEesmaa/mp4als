@@ -36,4 +36,4 @@ contents : Header file for crc.cpp
 #define CRC32_POLYNOMIAL   0xEDB88320L
 
 void BuildCRCTable();
-unsigned long CalculateBlockCRC32(unsigned int count, unsigned long crc, void *buffer);
+unsigned int CalculateBlockCRC32(unsigned int count, unsigned int crc, void *buffer);

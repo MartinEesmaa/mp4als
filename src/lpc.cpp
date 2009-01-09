@@ -51,7 +51,7 @@ contents : Linear prediction and related functions
  *
  *************************************************************************/
 
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 	typedef __int64 INT64;
 #else
 	#include <stdint.h>
@@ -92,7 +92,7 @@ void acf(double *x, long N, long k, short norm, double *rxx)
 }
 
 // Hanning window
-void hanning(long *x, double *xd, long N)
+void hanning(int *x, double *xd, long N)
 {
 	long n;
 
@@ -101,7 +101,7 @@ void hanning(long *x, double *xd, long N)
 }
 
 // Hamming window
-void hamming(long *x, double *xd, long N)
+void hamming(int *x, double *xd, long N)
 {
 	long n;
 
@@ -110,7 +110,7 @@ void hamming(long *x, double *xd, long N)
 }
 
 // Rect window
-void rect(long *x, double *xd, long N)
+void rect(int *x, double *xd, long N)
 {
 	long n;
 
@@ -119,7 +119,7 @@ void rect(long *x, double *xd, long N)
 }
 
 // Blackman window
-void blackman(long *x, double *xd, long N)
+void blackman(int *x, double *xd, long N)
 {
 	long n;
 
@@ -165,7 +165,7 @@ short durbin(short ord, double *rxx, double *par)
 // -> P		: Predictor order
 // -> win	: Window type
 // <- par	: Parcor coefficients
-short GetCof(long *x, long N, short P, short win, double *par)
+short GetCof(int *x, long N, short P, short win, double *par)
 {
 	double *xd = new double[N];
 	double *rxx = new double[P+1];
@@ -193,10 +193,10 @@ short GetCof(long *x, long N, short P, short win, double *par)
 }
 
 // Conversion from parcor to direct form coefficients
-short par2cof(long *cof, long *par, short ord, short Q)
+short par2cof(int *cof, int *par, short ord, short Q)
 {
 	short m, i;
-	long korr;
+	int korr;
 	INT64 temp, temp2;
 
 	korr = 1 << (Q - 1);
@@ -209,13 +209,13 @@ short par2cof(long *cof, long *par, short ord, short Q)
 		for (i = 1; i <= m/2; i++)
 		{
 			temp = cof[i] + ((((INT64)par[m] * cof[m-i]) + korr) >> Q);
-			if ((temp > LONG_MAX) || (temp < LONG_MIN))	// Overflow
+			if ((temp > INT_MAX) || (temp < INT_MIN))	// Overflow
 				return(1);
 			temp2 = cof[m-i] + ((((INT64)par[m] * cof[i]) + korr) >> Q);
-			if ((temp2 > LONG_MAX) || (temp2 < LONG_MIN))	// Overflow
+			if ((temp2 > INT_MAX) || (temp2 < INT_MIN))	// Overflow
 				return(1);
-			cof[m-i] = (long)temp2;
-			cof[i] = (long)temp;
+			cof[m-i] = (int)temp2;
+			cof[i] = (int)temp;
 		}
 		cof[m] = par[m];
 	}
@@ -224,10 +224,10 @@ short par2cof(long *cof, long *par, short ord, short Q)
 }
 
 // Caculate prediction residual
-void GetResidual(long *x, long N, short P, short Q, long *cof, long *d)
+void GetResidual(int *x, long N, short P, short Q, int *cof, int *d)
 {
 	long n, i;
-	long korr;
+	int korr;
 	INT64 y;
 
 	korr = 1 << (Q - 1);	// Korrekturterm
@@ -242,15 +242,15 @@ void GetResidual(long *x, long N, short P, short Q, long *cof, long *d)
 			y += (INT64)cof[i-1] * x[n-i];
 
 		// Schätzwert vom Signal abziehen
-		d[n] = x[n] + (long)(y >> Q);				// Division y / 2^Q
+		d[n] = x[n] + (int)(y >> Q);				// Division y / 2^Q
 	}
 }
 
 // Calculate original signal
-void GetSignal(long *x, long N, short P, short Q, long *cof, long *d)
+void GetSignal(int *x, long N, short P, short Q, int *cof, int *d)
 {
 	long n, i;
-	long korr;
+	int korr;
 	INT64 y;
 
 	korr = 1 << (Q - 1);	// Korrekturterm
@@ -264,15 +264,15 @@ void GetSignal(long *x, long N, short P, short Q, long *cof, long *d)
 			y += (INT64)cof[i-1] * x[n-i];
 
 		// Schätzwert zum Restfehlersignal addieren
-		x[n] = d[n] - (long)(y >> Q);
+		x[n] = d[n] - (int)(y >> Q);
 	}
 }
 
 // Calculate prediction residual for random access block (internal par -> cof conversion)
-short GetResidualRA(long *x, long N, short P, short Q, long *par, long *cof, long *d)
+short GetResidualRA(int *x, long N, short P, short Q, int *par, int *cof, int *d)
 {
 	long n, i, m;
-	long korr;
+	int korr;
 	INT64 y, temp, temp2;
 
 	if(N < P) P = (short)N;
@@ -293,7 +293,7 @@ short GetResidualRA(long *x, long N, short P, short Q, long *par, long *cof, lon
 			y += (INT64)cof[i] * x[n-i];			// cof[i] because of cof-- (see above)
 
 		// Subtract estimate from signal
-		d[n] = x[n] + (long)(y >> Q);				// Division y / 2^Q
+		d[n] = x[n] + (int)(y >> Q);				// Division y / 2^Q
 
 		m = n + 1;	// Order
 
@@ -301,13 +301,13 @@ short GetResidualRA(long *x, long N, short P, short Q, long *par, long *cof, lon
 		for (i = 1; i <= m/2; i++)
 		{
 			temp = cof[i] + ((((INT64)par[m] * cof[m-i]) + korr) >> Q);
-			if ((temp > LONG_MAX) || (temp < LONG_MIN))	// Overflow
+			if ((temp > INT_MAX) || (temp < INT_MIN))	// Overflow
 				return(1);
 			temp2 = cof[m-i] + ((((INT64)par[m] * cof[i]) + korr) >> Q);
-			if ((temp2 > LONG_MAX) || (temp2 < LONG_MIN))	// Overflow
+			if ((temp2 > INT_MAX) || (temp2 < INT_MIN))	// Overflow
 				return(1);
-			cof[m-i] = (long)temp2;
-			cof[i] = (long)temp;
+			cof[m-i] = (int)temp2;
+			cof[i] = (int)temp;
 		}
 		cof[m] = par[m];
 	}
@@ -322,17 +322,17 @@ short GetResidualRA(long *x, long N, short P, short Q, long *par, long *cof, lon
 			y += (INT64)cof[i] * x[n-i];
 
 		// Subtract estimate from signal
-		d[n] = x[n] + (long)(y >> Q);				// Division y / 2^Q
+		d[n] = x[n] + (int)(y >> Q);				// Division y / 2^Q
 	}
 
 	return(0);
 }
 
 // Calculate original signal for random access block (internal par -> cof conversion)
-short GetSignalRA(long *x, long N, short P, short Q, long *par, long *cof, long *d)
+short GetSignalRA(int *x, long N, short P, short Q, int *par, int *cof, int *d)
 {
 	long n, i, m;
-	long korr;
+	int korr;
 	INT64 y, temp, temp2;
 
 	if(N < P) P = (short)N;
@@ -353,7 +353,7 @@ short GetSignalRA(long *x, long N, short P, short Q, long *par, long *cof, long 
 			y += (INT64)cof[i] * x[n-i];			// cof[i] because of cof-- (see above)
 
 		// Add estimate to residual
-		x[n] = d[n] - (long)(y >> Q);				// Division y / 2^Q
+		x[n] = d[n] - (int)(y >> Q);				// Division y / 2^Q
 
 		m = n + 1;	// Order
 
@@ -361,13 +361,13 @@ short GetSignalRA(long *x, long N, short P, short Q, long *par, long *cof, long 
 		for (i = 1; i <= m/2; i++)
 		{
 			temp = cof[i] + ((((INT64)par[m] * cof[m-i]) + korr) >> Q);
-			if ((temp > LONG_MAX) || (temp < LONG_MIN))	// Overflow
+			if ((temp > INT_MAX) || (temp < INT_MIN))	// Overflow
 				return(1);
 			temp2 = cof[m-i] + ((((INT64)par[m] * cof[i]) + korr) >> Q);
-			if ((temp2 > LONG_MAX) || (temp2 < LONG_MIN))	// Overflow
+			if ((temp2 > INT_MAX) || (temp2 < INT_MIN))	// Overflow
 				return(1);
-			cof[m-i] = (long)temp2;
-			cof[i] = (long)temp;
+			cof[m-i] = (int)temp2;
+			cof[i] = (int)temp;
 		}
 		cof[m] = par[m];
 	}
@@ -382,14 +382,14 @@ short GetSignalRA(long *x, long N, short P, short Q, long *par, long *cof, long 
 			y += (INT64)cof[i] * x[n-i];
 
 		// Add estimate to residual
-		x[n] = d[n] - (long)(y >> Q);				// Division y / 2^Q
+		x[n] = d[n] - (int)(y >> Q);				// Division y / 2^Q
 	}
 
 	return(0);
 }
 
 // Check if all samples are zero
-short BlockIsZero(long *x, long N)
+short BlockIsZero(int *x, long N)
 {
 	short z;
 	long n;
@@ -411,9 +411,9 @@ short BlockIsZero(long *x, long N)
 }
 
 // Check if als samples have the same value
-long BlockIsConstant(long *x, long N)
+int BlockIsConstant(int *x, long N)
 {
-	long *x1, c, n;
+	int *x1, c, n;
 
 	if (N == 1)
 		return(x[0]);
@@ -436,10 +436,10 @@ long BlockIsConstant(long *x, long N)
 }
 
 // Remove LSBs if they are zero
-short ShiftOutEmptyLSBs(long *x, long N)
+short ShiftOutEmptyLSBs(int *x, long N)
 {
 	short empty = 1, shift;
-	long i, temp = 0;
+	int i, temp = 0;
 		
 	// Repeat OR operation while (at least the last) resulting LSB is empty
 	for (i = 0; (i < N) & empty; i++)
@@ -468,10 +468,10 @@ short ShiftOutEmptyLSBs(long *x, long N)
 // ROUTINES WITHOUT CHECK
 
 // Conversion from parcor to direct form coefficients (no check for overflow)
-short par2cof_nocheck(long *cof, long *par, short ord, short Q)
+short par2cof_nocheck(int *cof, int *par, short ord, short Q)
 {
 	short m, i;
-	long korr;
+	int korr;
 	INT64 temp, temp2;
 
 	korr = 1 << (Q - 1);
@@ -485,8 +485,8 @@ short par2cof_nocheck(long *cof, long *par, short ord, short Q)
 		{
 			temp = cof[i] + ((((INT64)par[m] * cof[m-i]) + korr) >> Q);
 			temp2 = cof[m-i] + ((((INT64)par[m] * cof[i]) + korr) >> Q);
-			cof[m-i] = (long)temp2;
-			cof[i] = (long)temp;
+			cof[m-i] = (int)temp2;
+			cof[i] = (int)temp;
 		}
 		cof[m] = par[m];
 	}
@@ -495,10 +495,10 @@ short par2cof_nocheck(long *cof, long *par, short ord, short Q)
 }
 
 // Calculate original signal for random access block (internal par -> cof conversion)
-short GetSignalRA_nocheck(long *x, long N, short P, short Q, long *par, long *cof, long *d)
+short GetSignalRA_nocheck(int *x, long N, short P, short Q, int *par, int *cof, int *d)
 {
 	long n, i, m;
-	long korr;
+	int korr;
 	INT64 y, temp, temp2;
 
 	korr = 1 << (Q - 1);	// Correction term
@@ -517,7 +517,7 @@ short GetSignalRA_nocheck(long *x, long N, short P, short Q, long *par, long *co
 			y += (INT64)cof[i] * x[n-i];			// cof[i] because of cof-- (see above)
 
 		// Add estimate to residual
-		x[n] = d[n] - (long)(y >> Q);				// Division y / 2^Q
+		x[n] = d[n] - (int)(y >> Q);				// Division y / 2^Q
 
 		m = n + 1;	// Order
 
@@ -526,8 +526,8 @@ short GetSignalRA_nocheck(long *x, long N, short P, short Q, long *par, long *co
 		{
 			temp = cof[i] + ((((INT64)par[m] * cof[m-i]) + korr) >> Q);
 			temp2 = cof[m-i] + ((((INT64)par[m] * cof[i]) + korr) >> Q);
-			cof[m-i] = (long)temp2;
-			cof[i] = (long)temp;
+			cof[m-i] = (int)temp2;
+			cof[i] = (int)temp;
 		}
 		cof[m] = par[m];
 	}
@@ -542,8 +542,9 @@ short GetSignalRA_nocheck(long *x, long N, short P, short Q, long *par, long *co
 			y += (INT64)cof[i] * x[n-i];
 
 		// Add estimate to residual
-		x[n] = d[n] - (long)(y >> Q);				// Division y / 2^Q
+		x[n] = d[n] - (int)(y >> Q);				// Division y / 2^Q
 	}
 
 	return(0);
 }
+

@@ -1,39 +1,31 @@
-/******************* MPEG-4 Audio Lossless Coding ******************
- ******************* MPEG-A Audio Archival MAF    ******************
+/***************** MPEG-4 Audio Lossless Coding *********************
 
 This software module was originally developed by
 
 NTT (Nippon Telegraph and Telephone Corporation), Japan
 
-in the course of development of the MPEG-4 Audio standard ISO/IEC 
-14496-3, associated amendments and the ISO/IEC 23000-6: Audio 
-Archival Multimedia Application Format standard.
-This software module is an implementation of a part of one or more 
-MPEG-4 Audio lossless coding tools as specified by the MPEG-4 Audio 
-standard and ISO/IEC 23000-6: Audio Archival Multimedia Application 
-Format tools  as specified by the MPEG-A Requirements.
-ISO/IEC gives users of the MPEG-4 Audio standards and of ISO/IEC 
-23000-6: Audio Archival Multimedia Application Format free license 
-to this software module or modifications thereof for use in hardware 
-or software products claiming conformance to MPEG-4 Audio and MPEG-A.
-Those intending to use this software module in hardware or software 
-products are advised that its use may infringe existing patents. 
-The original developer of this software module and his/her company, 
-the subsequent editors and their companies, and ISO/IEC have no 
-liability for use of this software module or modifications thereof 
-in an implementation.
-Copyright is not released for non MPEG-4 / MPEG-A conforming 
-products. The organizations named above retain full rights to use 
-the code for their own purpose, assign or donate the code to a third 
-party and inhibit third parties from using the code for non MPEG-4 / 
-MPEG-A conforming products.
+in the course of development of the MPEG-4 Audio standard ISO/IEC 14496-3
+and associated amendments. This software module is an implementation of
+a part of one or more MPEG-4 Audio lossless coding tools as specified
+by the MPEG-4 Audio standard. ISO/IEC gives users of the MPEG-4 Audio
+standards free license to this software module or modifications
+thereof for use in hardware or software products claiming conformance
+to the MPEG-4 Audio standards. Those intending to use this software
+module in hardware or software products are advised that this use may
+infringe existing patents. The original developer of this software
+module, the subsequent editors and their companies, and ISO/IEC have
+no liability for use of this software module or modifications thereof
+in an implementation. Copyright is not released for non MPEG-4 Audio
+conforming products. The original developer retains full right to use
+the code for the developer's own purpose, assign or donate the code to
+a third party and to inhibit third party from using the code for non
+MPEG-4 Audio conforming products. This copyright notice must be included
+in all copies or derivative works.
 
 Copyright (c) 2006.
 
-This notice must be included in all copies or derivative works.
-
 Filename : ImfDescriptor.h
-Project  : MPEG-A Audio Archival Multimedia Application Format
+Project  : MPEG-4 Audio Lossless Coding
 Author   : Koichi Sugiura (NTT Advanced Technology Corporation)
            Noboru Harada  (NTT)
 Date     : August 31st, 2006
@@ -41,12 +33,22 @@ Contents : Descriptor classes defined in ISO/IEC 14496-12
 
 *******************************************************************/
 
+/******************************************************************
+ *
+ * Modifications:
+ *
+ * 2007/05/23, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added Print() to every class.
+ *
+ ******************************************************************/
+
 #if !defined( IMFDESCRIPTOR_INCLUDED )
 #define	IMFDESCRIPTOR_INCLUDED
 
 #include	<vector>
 #include	"ImfType.h"
 #include	"ImfStream.h"
+#include	"ImfPrintStream.h"
 
 namespace NAlsImf {
 
@@ -129,6 +131,10 @@ namespace NAlsImf {
 		virtual	bool		Read( CBaseStream& Stream );
 		virtual	bool		Write( CBaseStream& Stream ) const;
 		virtual	IMF_INT64	CalcSize( void ) { return SetDataSize( GetDataSize() ); }
+		virtual	void		Print( CPrintStream& Stream ) const {
+			Stream << "<Descriptor tag:" << m_object_id << ">" << std::endl;
+			IMF_PRINT( size );
+		}
 		IMF_INT8			CheckReadSize( CBaseStream& Stream ) const;
 		IMF_UINT32			GetLastError( void ) const { return m_LastError; }
 	public:
@@ -160,6 +166,11 @@ namespace NAlsImf {
 		bool	Read( CBaseStream& Stream );
 		bool	Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 2 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CBaseDescriptor::Print( Stream );
+			IMF_PRINT( ObjectDescriptorID );
+			IMF_PRINT( URL_Flag );
+		}
 		IMF_UINT16	m_ObjectDescriptorID;				// 10-bit
 		bool		m_URL_Flag;							//  1-bit
 	};
@@ -174,6 +185,17 @@ namespace NAlsImf {
 		bool		Read( CBaseStream& Stream );
 		bool		Write( CBaseStream& Stream ) const;
 		IMF_INT64	CalcSize( void ) { return SetDataSize( 2 + 5 ); }
+		void		Print( CPrintStream& Stream ) const {
+			CBaseDescriptor::Print( Stream );
+			IMF_PRINT( ObjectDescriptorID );
+			IMF_PRINT( URL_Flag );
+			IMF_PRINT( includeInlineProfileLevelFlag );
+			IMF_PRINT( ODProfileLevelIndication );
+			IMF_PRINT( sceneProfileLevelIndication );
+			IMF_PRINT( audioProfileLevelIndication );
+			IMF_PRINT( visualProfileLevelIndication );
+			IMF_PRINT( graphicsProfileLevelIndication );
+		}
 		IMF_UINT16	m_ObjectDescriptorID;				// 10-bit
 		bool		m_URL_Flag;							//  1-bit
 		bool		m_includeInlineProfileLevelFlag;	//  1-bit

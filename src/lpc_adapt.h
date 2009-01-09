@@ -45,4 +45,4 @@ contents : Header file for lpc_adapt.cpp/lpc_adapt.obj
  *************************************************************************/
 
 
-short GetCofAdaptOrder(long *x, long N, short maxP, short win, double *par, long freq);
+short GetCofAdaptOrder(int *x, long N, short maxP, short win, double *par, long freq);

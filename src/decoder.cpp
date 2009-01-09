@@ -129,6 +129,23 @@ contents : Implementation of the CLpacDecoder class
  * 10/17/2005, Noboru Harada <n-harada@theory.brl.ntt.co.jp>
  *   - Merged bug fixed codes for RLS-LMS prepared from I2R.
  *
+ * 05/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - supported 64-bit data size.
+ *   - replaced FILE* with HALSSTREAM.
+ *
+ * 10/20/2008, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - debugged the limitation of 2nd and 3rd rice parameters to 15 
+ *     in case of Res<=16.
+ *   - debugged DecodeBlockParameter() to handle IntRes=20 properly.
+ *   - debugged maximum prediction order calculation.
+ *
+ * 10/23/2008, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - replaced ceil( double ) with ceil( float ) to avoid g++ bug.
+ *
+ * 11/28/2008, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - rewritten the formula for calculating the bit-width of the prediction
+ *     order using integer operations (instead of floating-point).
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -136,7 +153,7 @@ contents : Implementation of the CLpacDecoder class
 #include <math.h>
 #include <assert.h>
 
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 	#include <io.h>
 	#include <fcntl.h>
 #endif
@@ -154,6 +171,18 @@ contents : Implementation of the CLpacDecoder class
 #define min(a, b)  (((a) < (b)) ? (a) : (b))
 #define max(a, b)  (((a) > (b)) ? (a) : (b))
 
+namespace {
+
+int ilog2_ceil(unsigned int x) {
+	if (x == 0) return -1;
+
+	int l = 0;
+	while ((l < sizeof(x)*8) && ((1u << l) < x)) ++l;
+	return l;
+}
+
+} /* namespace */
+
 // Constructor
 CLpacDecoder::CLpacDecoder()
 {
@@ -164,6 +193,9 @@ CLpacDecoder::CLpacDecoder()
 	fid = 0;		// No frame decoded yet
 	CRC = 0;		// CRC initialization
 	Q = 20;			// Quantizer value
+	CloseInput = CloseOutput = false;
+	ChanSort = 0;
+	mp4file = false;
 }
 
 CLpacDecoder::~CLpacDecoder()
@@ -202,7 +234,6 @@ CLpacDecoder::~CLpacDecoder()
 		delete [] bbuf;
 		delete [] d;
 		delete [] cofQ;
-		delete [] buff;
 
 		if (RA && (RAflag == 2))
 			delete [] RAUsize;
@@ -222,59 +253,43 @@ CLpacDecoder::~CLpacDecoder()
 
 short CLpacDecoder::CloseFiles()
 {
-	if (fpInput != NULL)
-		if (fclose(fpInput))
-			return(1);
-	fpInput = NULL;
+	if ( fpInput ) {
+		if ( CloseInput ) fclose( fpInput );
+		fpInput = NULL;
+		CloseInput = false;
+	}
 
-	if (fpOutput != NULL)
-		if (fclose(fpOutput))
-			return(2);
-	fpOutput = NULL;
-
+	if ( fpOutput ) {
+		if ( CloseOutput ) fclose( fpOutput );
+		fpOutput = NULL;
+		CloseOutput = false;
+	}
 	return(0);
 }
 
-/*void CLpacDecoder::GetFilePositions(long *SizeIn, long *SizeOut)
+/*void CLpacDecoder::GetFilePositions(int *SizeIn, int *SizeOut)
 {
 	*SizeIn = ftell(fpInput);
 	*SizeOut = ftell(fpOutput);
 }*/
 
-short CLpacDecoder::OpenInputFile(const char *name)
-{
-	if (name[0] == ' ')
-	{
-		fpInput = stdin;
-#ifdef WIN32
-		if (_setmode(_fileno(stdin), _O_BINARY) == -1)
-		{
-			fprintf(stderr, "Cannot set 'stdin' mode\n");
-			return(1);
-		}
-#endif
-	}
-	else if (!(fpInput = fopen(name, "rb")))
-		return(2);
-
-	return(0);
-}
-
-short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo)
+short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo, const MP4INFO& Mp4Info)
 {
 	BYTE tmp;
 	long i;
-	ULONG als_id;
+	UINT als_id;
 
 	// Read ALS header information ////////////////////////////////////////////////////////////////
-	als_id = ReadULongMSBfirst(fpInput);		// ALS identifier: 'ALS' + 0x00 (= 0x414C5300)
+	als_id = ReadUIntMSBfirst(fpInput);		// ALS identifier: 'ALS' + 0x00 (= 0x414C5300)
 	if (als_id != 0x414C5300UL)
 		return(1);
 
-	Freq = ReadULongMSBfirst(fpInput);			// sampling frequency
-	Samples = ReadULongMSBfirst(fpInput);		// samples
-	if (Samples == 0xFFFFFFFF)
-		return(1);
+	Freq = ReadUIntMSBfirst(fpInput);			// sampling frequency
+	Samples = ReadUIntMSBfirst(fpInput);		// samples
+	if (Samples == 0xFFFFFFFF) {
+		if ( !mp4file ) return (1);
+		Samples = Mp4Info.m_Samples;
+	}
 	Chan = ReadUShortMSBfirst(fpInput) + 1;		// channels
 	
 	fread(&tmp, 1, 1, fpInput);
@@ -324,7 +339,7 @@ short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo)
 	if (ChanSort)
 	{
 		CBitIO in;
-		unsigned long u;
+		unsigned int u;
 		ChPos = new unsigned short[Chan];
 
 		i = (Chan > 1) ? (Chan-1) : 1;
@@ -332,7 +347,7 @@ short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo)
 		while(i) {i /= 2; NeedPuchBit++;}
 
 		long size = (NeedPuchBit*Chan)/8+1;
-		buff = new unsigned char[size];
+		unsigned char* buff = new unsigned char[size];
 		fread(buff, 1, size, fpInput);
 		in.InitBitRead(buff);
 
@@ -345,12 +360,10 @@ short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo)
 		delete [] buff;
 	}
 
-	HeaderSize = ReadULongMSBfirst(fpInput);	// header size
-	if (HeaderSize == 0xFFFFFFFF)
-		HeaderSize = 0;
-	TrailerSize = ReadULongMSBfirst(fpInput);	// trailer size
-	if (TrailerSize == 0xFFFFFFFF)
-		TrailerSize = 0;
+	HeaderSize = ReadUIntMSBfirst(fpInput);	// header size
+	TrailerSize = ReadUIntMSBfirst(fpInput);	// trailer size
+	TrailerOffset = 0;
+	
 	// End of header information //////////////////////////////////////////////////////////////////
 
 	// Set parameter structure
@@ -362,8 +375,8 @@ short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo)
 	ainfo->SampleType = SampleType;
 	ainfo->Samples = Samples;
 	ainfo->Freq = Freq;
-	ainfo->HeaderSize = HeaderSize;
-	ainfo->TrailerSize = TrailerSize;
+	ainfo->HeaderSize = ( HeaderSize == 0xffffffff ) ? Mp4Info.m_HeaderSize : HeaderSize;
+	ainfo->TrailerSize = ( TrailerSize == 0xffffffff ) ? Mp4Info.m_TrailerSize : TrailerSize;
 
 	encinfo->FrameLength = N;
 	encinfo->AdaptOrder = Adapt;
@@ -380,46 +393,28 @@ short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo)
 	return(0);
 }
 
-short CLpacDecoder::OpenOutputFile(const char *name)
-{
-	if (name[0] == '\0')
-		fpOutput = NULL;
-	else if (name[0] == ' ')
-	{
-		fpOutput = stdout;
-#ifdef WIN32
-		if (_setmode(_fileno(stdout), _O_BINARY) == -1)
-		{
-			fprintf(stderr, "Cannot set 'stdout' mode\n");
-			return(1);
-		}
-#endif
-	}
-	else if (!(fpOutput = fopen(name, "wb")))
-	{
-		fclose(fpInput);
-		return(2);
-	}
-
-	return(0);
-}
-
-long CLpacDecoder::WriteHeader()
+ALS_INT64 CLpacDecoder::WriteHeader( const MP4INFO& Mp4Info )
 {
 	long i, j, rest;
 
 	// Copy header
-	buff = new unsigned char[max(HeaderSize, TrailerSize)];
-	fread(buff, 1, HeaderSize, fpInput);
-	if (fpOutput != NULL)
-		if (fwrite(buff, 1, HeaderSize, fpOutput) != HeaderSize) return(frames = -2);
-
+	if ( HeaderSize == 0xffffffff ) {
+		if ( !mp4file ) return ( frames = -2 );
+		if ( !CopyData( Mp4Info.m_pOriginalFile, Mp4Info.m_HeaderOffset, Mp4Info.m_HeaderSize, fpOutput ) ) return ( frames = -2 );
+	} else {
+		if ( HeaderSize >> 32 ) return ( frames = -2 );
+		if ( !CopyData( fpInput, HeaderSize, fpOutput ) ) return ( frames = -2 );
+	}
+	
 	// Read trailer
-	fread(buff, 1, TrailerSize, fpInput);
+	if ( TrailerSize != 0xffffffff ) {
+		TrailerOffset = ftell( fpInput );
+		fseek( fpInput, TrailerSize, SEEK_CUR );
+	}
 
 	if (CRCenabled)
 	{
-		CRCorg = ReadULongMSBfirst(fpInput);
+		CRCorg = ReadUIntMSBfirst(fpInput);
 		// Initialize CRC
 		BuildCRCTable();
 		CRC = CRC_MASK;
@@ -427,29 +422,30 @@ long CLpacDecoder::WriteHeader()
 
 	// Number of frames
 	frames = Samples / N;
-	rest = Samples % N;
+	rest = static_cast<long>( Samples % N );
 	if (rest)
 		frames++;
 
 	if (RA)
 	{
 		// number of random acess units
-		RAUnits = frames / RA;
+		if ( frames / RA > 0x7fffffff ) return ( frames = -2 );
+		RAUnits = static_cast<long>( frames / RA );
 		if (frames % RA)
 			RAUnits++;
 		RAUid = 0;			// RAU index (0..RAUnits-1)
 
 		if (RAflag == 2)		// read random access info from header
 		{
-			RAUsize = new unsigned long[RAUnits];
+			RAUsize = new unsigned int[RAUnits];
 			for (long r = 0; r < RAUnits; r++)
-				RAUsize[r] = ReadULongMSBfirst(fpInput);
+				RAUsize[r] = ReadUIntMSBfirst(fpInput);
 		}
 	}
 
 	if (AUXenabled)	// aux data present
 	{
-		unsigned long size = ReadULongMSBfirst(fpInput);	// size of aux data
+		unsigned int size = ReadUIntMSBfirst(fpInput);	// size of aux data
 		if (size == 0xFFFFFFFF)
 			size = 0;
 		fseek(fpInput, size, SEEK_CUR);				// skip aux data
@@ -459,13 +455,13 @@ long CLpacDecoder::WriteHeader()
 		Joint = 0;
 
 	// Allocate memory
-	xp = new long*[Chan];
-	x = new long*[Chan];
+	xp = new int*[Chan];
+	x = new int*[Chan];
 	for (i = 0; i < Chan; i++)
 	{
-		xp[i] = new long[N+P];
+		xp[i] = new int[N+P];
 		x[i] = xp[i] + P;
-		memset(xp[i], 0, 4*P);
+		memset(xp[i], 0, sizeof(int)*P);
 	}
 	
 	// following buffer size is enough if only forward predictor is used.
@@ -489,14 +485,14 @@ long CLpacDecoder::WriteHeader()
 
 	if (Joint)
 	{
-		xps = new long*[Chan/2];
-		xs = new long*[Chan/2];
+		xps = new int*[Chan/2];
+		xs = new int*[Chan/2];
 
 		for (i = 0; i < Chan/2; i++)
 		{
-			xps[i] = new long[N+P];
+			xps[i] = new int[N+P];
 			xs[i] = xps[i] + P;
-			memset(xps[i], 0, 4*P);
+			memset(xps[i], 0, sizeof(int)*P);
 		}
 	}
 
@@ -525,8 +521,8 @@ long CLpacDecoder::WriteHeader()
 		NeedPuchBit++;
 	}
 
-	d = new long[N];								// Prediction residual
-	cofQ = new long[P];								// Quantized coefficients
+	d = new int[N];								// Prediction residual
+	cofQ = new int[P];								// Quantized coefficients
 
 	// Length of last frame
 	if (rest)
@@ -537,23 +533,29 @@ long CLpacDecoder::WriteHeader()
 	return(frames);
 }
 
-long CLpacDecoder::WriteTrailer()
+ALS_INT64 CLpacDecoder::WriteTrailer( const MP4INFO& Mp4Info )
 {
-	if (fpOutput != NULL)
-		if (fwrite(buff, 1, TrailerSize, fpOutput) != TrailerSize) return(-1);
+	if ( TrailerSize == 0xffffffff ) {
+		if ( !mp4file ) return -1;
+		if ( !CopyData( Mp4Info.m_pOriginalFile, Mp4Info.m_TrailerOffset, Mp4Info.m_TrailerSize, fpOutput ) ) return -1;
+	} else {
+		if ( TrailerSize >> 32 ) return -1;
+		fseek( fpInput, TrailerOffset, SEEK_SET );
+		if ( !CopyData( fpInput, TrailerSize, fpOutput ) ) return -1;
+	}
 
 	CRC ^= CRC_MASK;
 	CRC -= CRCorg;		// CRC = 0 if decoding was successful
 
-	return(0);
+	return ( TrailerSize == 0xffffffff ) ? Mp4Info.m_TrailerSize : TrailerSize;
 }
 
-long CLpacDecoder::DecodeAll()
+short CLpacDecoder::DecodeAll( const MP4INFO& Mp4Info )
 {
 	long f;
 
-	if ((frames = WriteHeader()) < 1)
-		return(frames);
+	if ((frames = WriteHeader( Mp4Info )) < 1)
+		return static_cast<short>( frames );
 
 	// Main loop for all frames
 	for (f = 0; f < frames; f++)
@@ -563,13 +565,13 @@ long CLpacDecoder::DecodeAll()
 			return(-2);
 	}
 
-	if (WriteTrailer() < 0)
+	if (WriteTrailer( Mp4Info ) < 0)
 		return(-2);
 
 	return(CRC != 0);	// Return CRC status
 }
 
-unsigned long CLpacDecoder::GetCRC()
+unsigned int CLpacDecoder::GetCRC()
 {
 	return(CRC);
 }
@@ -649,14 +651,14 @@ short CLpacDecoder::DecodeFrame()
 	BYTE h1;
 	long c, c1, c2, b, B, oaa;
 	long i, Nb[32], NN, Nsum, mtp;
-	ULONG BSflags;
+	UINT BSflags;
 	short CBS;
 	BYTE h, typ, flag;
 
-	long **xsave, **xssave, **xtmp;
-	xsave = new long*[Chan];
-	xssave = new long*[(long)(Chan/2)];
-	xtmp = new long*[Chan];
+	int **xsave, **xssave, **xtmp;
+	xsave = new int*[Chan];
+	xssave = new int*[(long)(Chan/2)];
+	xtmp = new int*[Chan];
 	
 	fid++;						// Number of current frame
 
@@ -669,7 +671,7 @@ short CLpacDecoder::DecodeFrame()
 		if (((fid - 1) % RA))	// Not first frame of RA unit
 			RAframe = 0;		// Turn off RA for current frame
 		else if (RAflag == 1)
-			ReadULongMSBfirst(fpInput);		// read size of RAU
+			ReadUIntMSBfirst(fpInput);		// read size of RAU
 	}
 
 	MCCflag=0;
@@ -680,8 +682,8 @@ short CLpacDecoder::DecodeFrame()
 		{
 			unsigned char uu;
 			fread(&uu, 1, 1, fpInput);
-			if(uu) MCCflag=1;
-			else MCCflag=0;
+			if(uu) MCCflag=0;
+			else MCCflag=1;
 		}
 	}
 
@@ -1012,11 +1014,11 @@ short CLpacDecoder::DecodeFrame()
 
 	// Copy last P samples of each frame in front of it
 	for (c = 0; c < Chan; c++)
-		memcpy(x[c] - P, x[c] + (N - P), P * 4);
+		memcpy(x[c] - P, x[c] + (N - P), P * sizeof(int));
 	if (Joint)
 	{
 		for (c = 0; c < Chan/2; c++)
-			memcpy(xs[c] - P, xs[c] + (N - P), P * 4);
+			memcpy(xs[c] - P, xs[c] + (N - P), P * sizeof(int));
 	}
 
 	// Write PCM audio data
@@ -1088,7 +1090,7 @@ short CLpacDecoder::DecodeFrame()
 }
 
 // Decode block (Normal)
-short CLpacDecoder::DecodeBlock(long *x, long Nb, short ra)
+short CLpacDecoder::DecodeBlock(int *x, long Nb, short ra)
 {
 	DecodeBlockParameter(&MccBuf, 0, Nb, ra);
 	DecodeBlockReconstruct(&MccBuf, 0, x, Nb, ra);
@@ -1099,23 +1101,24 @@ short CLpacDecoder::DecodeBlock(long *x, long Nb, short ra)
 void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, long Nb, short ra)
 {
 	char *xpra = &pBuffer->m_xpara[Channel];
-	long *d = pBuffer->m_dmat[Channel];
-	long *puch = pBuffer->m_puchan[Channel];
-	long *mccparq = pBuffer->m_parqmat[Channel];
+	int *d = pBuffer->m_dmat[Channel];
+	int *puch = pBuffer->m_puchan[Channel];
+	int *mccparq = pBuffer->m_parqmat[Channel];
 	short *sft = &pBuffer->m_shift[Channel];
 	short *oP = &pBuffer->m_optP[Channel];
 	long oaa;
 	//MCC-ex
-	long *tdtauval = pBuffer->m_tdtau[Channel];
+	int *tdtauval = pBuffer->m_tdtau[Channel];
 	short *MccMode = pBuffer->m_MccMode[Channel];
-	long **mtgmm=pBuffer->m_cubgmm[Channel];
+	int **mtgmm=pBuffer->m_cubgmm[Channel];
 
 	BYTE h, hl[4];
 	short BlockType, optP, shift = 0;
-	long c, count, bytes, i, Ns;
-    long asi[1023];
-    long parq[1023];
-	ULONG u;
+	int c;
+	long count, bytes, i, Ns;
+    int asi[1023];
+    int parq[1023];
+	UINT u;
 	short s[16], sx[16], sub;
     // Bit-oriented input
     CBitIO in;
@@ -1174,21 +1177,21 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 	// CONSTANT BLOCK
 	else if (BlockType == 1)
 	{
-		fread( hl, 1, IntRes / 8, fpInput );
-		if ( IntRes == 8 ) {
-			c = static_cast<long>( hl[0] ) - 128;
+		fread( hl, 1, ( IntRes + 7 ) / 8, fpInput );
+		if ( IntRes <= 8 ) {
+			c = static_cast<int>( hl[0] ) - 128;
 		}
-		else if (IntRes == 16)
+		else if (IntRes <= 16)
 		{
 			c = short((hl[0] << 8) + hl[1]);
 		}
-		else if (IntRes == 24)
+		else if (IntRes <= 24)
 		{
 			c = hl[2] | (hl[1] << 8) | (hl[0] << 16);
 			if (c & 0x00800000)
 				c = c | 0xFF000000;
 		}
-		else	// IntRes == 32
+		else	// IntRes > 24
 		{
 			c = hl[3] | (hl[2] << 8) | (hl[1] << 16) | (hl[0] << 24);
 		}
@@ -1254,7 +1257,7 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 		else
 		{
 			short sbits = Res <= 16 ? 8 : 9;
-			ULONG S[16];
+			UINT S[16];
 			in.ReadBits(&S[0], sbits);
 			for (i = 1; i < sub; i++)
 			{
@@ -1281,15 +1284,9 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 		{
 			if (Adapt)
 			{
-				// Limit maximum predictor order to 1/8 of the block length
-				short Pmax = P;
-				if (P >= (Nb >> 3))
-					Pmax = (Nb >> 3) - 1;
-				if (Pmax < 1)
-					Pmax = 1;	// -> h >= 0
-
-				for (h = 9; Pmax < (1 << h); h--);
-				in.ReadBits(&u, h+1);
+				// Limit maximum predictor order
+				h = (Nb < 8) ? 1 : min(ilog2_ceil(P+1), max(ilog2_ceil(Nb >> 3), 1));
+				in.ReadBits(&u, h);
 				optP = (short)u;
 			}
 			else
@@ -1301,7 +1298,7 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 				for (i = 0; i < optP; i++)
 				{
 					in.ReadBits(&u, 7);
-					asi[i] = (long)u - 64;
+					asi[i] = (int)u - 64;
 				}
 			}
 			else
@@ -1339,12 +1336,13 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 		else		// Random access
 		{
 			// Progressive prediction: Separate entropy coding of the first 3 samples
+			short RiceLimit = ( Res <= 16 ) ? 15 : 31;
 			if (optP > 0)
 				in.ReadRice(d, Res-4, 1);
 			if (optP > 1)
-				in.ReadRice(d+1, min(s[0]+3, 31), 1);
+				in.ReadRice(d+1, min(s[0]+3, RiceLimit), 1);
 			if (optP > 2)
-				in.ReadRice(d+2, min(s[0]+1, 31), 1);
+				in.ReadRice(d+2, min(s[0]+1, RiceLimit), 1);
 
 			// Number of separately coded samples
 			short num = optP < 3 ? optP : 3;
@@ -1447,7 +1445,7 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 			}
 		
 			in.ReadBits(&u,NeedPuchBit); // Reference Channel
-			puch[oaa]=(long) u;
+			puch[oaa]=(int) u;
 		
 			if(puch[oaa] == Channel)
 			{
@@ -1478,10 +1476,10 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 					mtgmm[oaa][5]=rice_decode (1, &in.bio); // Tau+1
 					mtgmm[oaa][1] -= 2;
 
-					ULONG v;
+					UINT v;
 					in.ReadBits(&v,1);
 					in.ReadBits(&u,NeedTdBit);
-					tdtauval[oaa]=(long)u+3;
+					tdtauval[oaa]=(int)u+3;
 					if(v) tdtauval[oaa] *=-1;
 				}
 				
@@ -1494,26 +1492,26 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 	}
 }
 
-short	CLpacDecoder::DecodeBlockReconstruct( MCC_DEC_BUFFER* pBuffer, long Channel, long* x, long Nb, short ra )
+short	CLpacDecoder::DecodeBlockReconstruct( MCC_DEC_BUFFER* pBuffer, long Channel, int* x, long Nb, short ra )
 {
 	CLtpBuffer*	pLtpBuf = pBuffer->m_Ltp.m_pBuffer + Channel;
-	long*	parq = pBuffer->m_parqmat[Channel];
-	long*	d = pBuffer->m_dmat[Channel];
+	int*	parq = pBuffer->m_parqmat[Channel];
+	int*	d = pBuffer->m_dmat[Channel];
 	short	shift = pBuffer->m_shift[Channel];
 	short	optP = pBuffer->m_optP[Channel];
 	short	xpara = pBuffer->m_xpara[Channel];
 	long	i;
-	long*	xtmp;
+	int*	xtmp;
 
 	if ( xpara == 1 ) {
-		memset( x, 0, 4 * Nb );
+		memset( x, 0, sizeof(int) * Nb );
 
 	} else if ( xpara == 2 ) {
 		for( i=0; i<Nb; i++ ) x[i] = d[0];
 
 	} else {
 		if ( shift ) {
-			xtmp = new long [optP];
+			xtmp = new int [optP];
 			// "Shift" last P samples of previous block
 			for( i=-optP; i<0; i++ ) {
 				xtmp[optP+i] = x[i];		// buffer original values
@@ -1522,16 +1520,16 @@ short	CLpacDecoder::DecodeBlockReconstruct( MCC_DEC_BUFFER* pBuffer, long Channe
 		}
 
 		if ( PITCH ) {
-			long*	dd = pLtpBuf->m_ltpmat + 2048;
+			int*	dd = pLtpBuf->m_ltpmat + 2048;
 			if ( pLtpBuf->m_ltp ) {
-				memcpy( dd, d, Nb * sizeof(long) );
-				memset( dd-2048, 0, 2048 * sizeof(long) );
+				memcpy( dd, d, Nb * sizeof(int) );
+				memset( dd-2048, 0, 2048 * sizeof(int) );
 				pBuffer->m_Ltp.PitchReconstruct( dd, Nb, optP, Channel, Freq );
-				memcpy( dd-2048, dd+Nb-2048, 2048 * sizeof(long) );
-				memcpy( d, dd, Nb * sizeof(long) );
+				memcpy( dd-2048, dd+Nb-2048, 2048 * sizeof(int) );
+				memcpy( d, dd, Nb * sizeof(int) );
 			} else {
-				memcpy( dd, d, Nb * sizeof(long) );
-				memcpy( dd-2048, dd+Nb-2048, 2048 * sizeof(long) );
+				memcpy( dd, d, Nb * sizeof(int) );
+				memcpy( dd-2048, dd+Nb-2048, 2048 * sizeof(int) );
 			}
 		}
 
@@ -1556,11 +1554,11 @@ short	CLpacDecoder::DecodeBlockReconstruct( MCC_DEC_BUFFER* pBuffer, long Channe
 }
 
 // Decode block reconstruct
-short CLpacDecoder::DecodeBlockReconstructRLSLMS(MCC_DEC_BUFFER *pBuffer, long Channel, long *x)
+short CLpacDecoder::DecodeBlockReconstructRLSLMS(MCC_DEC_BUFFER *pBuffer, long Channel, int *x)
 {
 	CLtpBuffer*	pLtpBuf = pBuffer->m_Ltp.m_pBuffer + Channel;
-	long *parq = pBuffer->m_parqmat[Channel];
-	long *d = pBuffer->m_dmat[Channel];
+	int *parq = pBuffer->m_parqmat[Channel];
+	int *d = pBuffer->m_dmat[Channel];
 	short shift = pBuffer->m_shift[Channel];
 	short optP = pBuffer->m_optP[Channel];
 	short xpara = pBuffer->m_xpara[Channel];
@@ -1568,7 +1566,7 @@ short CLpacDecoder::DecodeBlockReconstructRLSLMS(MCC_DEC_BUFFER *pBuffer, long C
 	short i;
 
 	if(xpara == 1)
-		memset(x, 0, 4 * N);
+		memset(x, 0, sizeof(int) * N);
 	else if(xpara == 2)
 		for(i = 0; i < N; i++) x[i]=d[0];
 	else
@@ -1581,16 +1579,16 @@ short CLpacDecoder::DecodeBlockReconstructRLSLMS(MCC_DEC_BUFFER *pBuffer, long C
 		}
 		// rescontruct the pitch information
 		if ( PITCH ) {
-			long*	dd = pLtpBuf->m_ltpmat + 2048;
+			int*	dd = pLtpBuf->m_ltpmat + 2048;
 			if ( pLtpBuf->m_ltp ) {
-				memcpy( dd, d, N * sizeof(long) );
-				memset( dd-2048, 0, 2048 * sizeof(long) );
+				memcpy( dd, d, N * sizeof(int) );
+				memset( dd-2048, 0, 2048 * sizeof(int) );
 				pBuffer->m_Ltp.PitchReconstruct( dd, N, 10, Channel, Freq );
-				memcpy( dd-2048, dd+N-2048, 2048 * sizeof(long) );
-				memcpy( d, dd, N * sizeof(long) );
+				memcpy( dd-2048, dd+N-2048, 2048 * sizeof(int) );
+				memcpy( d, dd, N * sizeof(int) );
 			} else {
-				memcpy( dd, d, N * sizeof(long) );
-				memcpy( dd-2048, dd+N-2048, 2048 * sizeof(long) );
+				memcpy( dd, d, N * sizeof(int) );
+				memcpy( dd-2048, dd+N-2048, 2048 * sizeof(int) );
 			}
 		}
 		// restore the sample from d array
@@ -1604,7 +1602,40 @@ short CLpacDecoder::DecodeBlockReconstructRLSLMS(MCC_DEC_BUFFER *pBuffer, long C
 	}
 
 	// Copy last P samples of this block in front of it
-	memcpy(x - P, x + (N - P), P * 4);
+	memcpy(x - P, x + (N - P), P * sizeof(int));
 
 	return(0);
+}
+
+bool	CLpacDecoder::CopyData( const char* pFilename, ALS_UINT64 Offset, ALS_UINT64 Size, HALSSTREAM hOutFile )
+{
+	HALSSTREAM	hInFile = NULL;
+	bool		Result = false;
+	if ( OpenFileReader( pFilename, &hInFile ) == 0 ) {
+		fseek( hInFile, Offset, SEEK_SET );
+		Result = CopyData( hInFile, Size, hOutFile );
+		fclose( hInFile );
+	}
+	return Result;
+}
+
+bool	CLpacDecoder::CopyData( HALSSTREAM hInFile, ALS_UINT64 Size, HALSSTREAM hOutFile )
+{
+	const ALS_UINT32	COPYDATA_BUFSIZE = 1048576;
+	char*				pBuffer = NULL;
+	ALS_UINT32			CopySize;
+    
+	// Allocate buffer.
+	pBuffer = new char [ COPYDATA_BUFSIZE ];
+	if ( pBuffer == NULL ) return false;
+
+	// Copy loop.
+	while( Size > 0 ) {
+		CopySize = ( Size < COPYDATA_BUFSIZE ) ? static_cast<ALS_UINT32>( Size ) : COPYDATA_BUFSIZE;
+		if ( fread( pBuffer, 1, CopySize, hInFile ) != CopySize ) break;
+		if ( fwrite( pBuffer, 1, CopySize, hOutFile ) != CopySize ) break;
+		Size -= CopySize;
+	}
+	delete[] pBuffer;
+	return ( Size == 0 );
 }

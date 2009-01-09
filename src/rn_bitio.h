@@ -79,12 +79,12 @@ int rice_bits (int symbol, int s);
 void rice_encode (int symbol, int s, BITIO *p);
 int rice_decode (int s, BITIO *p);
 /* block-level functions: */
-int rice_encode_block (long *block, int s, int N, BITIO *p);
-int rice_decode_block (long *block, int s, int N, BITIO *p);
+int rice_encode_block (int *block, int s, int N, BITIO *p);
+int rice_decode_block (int *block, int s, int N, BITIO *p);
 
 /* new block Gilbert-Moore codes: */
-int bgmc_encode_blocks (long *blocks, int start, short *s, short *sx, int N, int sub, BITIO *p);
-int bgmc_decode_blocks (long *blocks, int start, short *s, short *sx, int N, int sub, BITIO *p);
+int bgmc_encode_blocks (int *blocks, int start, short *s, short *sx, int N, int sub, BITIO *p);
+int bgmc_decode_blocks (int *blocks, int start, short *s, short *sx, int N, int sub, BITIO *p);
 
 void display_stats (void);
 

@@ -42,6 +42,8 @@ contents : Multi-channel correlation
  * 04/27/2005, Yutaka Kamamoto <kamamoto@theory.brl.ntt.co.jp>
  *   - add MCCex(multi-tap MCC) modules for CE14(MCC extension)
  *   - moved #define MAXODR to mcc.h
+ * 10/22/2008, Koichi Sugiura <koichi.sugiura@ntt-at.cojp>
+ *   - modified process exit code.
 *************************************************************************/
 
 #include <stdio.h>
@@ -50,12 +52,12 @@ contents : Multi-channel correlation
 #include <time.h>
 #include <stdlib.h>
 
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 	#include <io.h>
 	#include <fcntl.h>
 #endif
 
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 	typedef __int64 INT64;
 #else
 	#include <stdint.h>
@@ -96,45 +98,45 @@ void	AllocateMccEncBuffer( MCC_ENC_BUFFER* pBuffer, long Chan, long N, short Res
 	long	BytesPerSample;
 
 	// Allocate buffers for pointers
-	pBuffer->m_dmat = new long* [Chan];
-	pBuffer->m_stdmat = new long* [Chan];
-	pBuffer->m_orgdmat = new long* [Chan];
-	pBuffer->m_asimat = new long* [Chan];
-	pBuffer->m_puchan = new long* [Chan];
+	pBuffer->m_dmat = new int* [Chan];
+	pBuffer->m_stdmat = new int* [Chan];
+	pBuffer->m_orgdmat = new int* [Chan];
+	pBuffer->m_asimat = new int* [Chan];
+	pBuffer->m_puchan = new int* [Chan];
 	//Added for MCC Extension
-	pBuffer->m_tdtau = new long* [Chan];
+	pBuffer->m_tdtau = new int* [Chan];
 	pBuffer->m_MccMode = new short* [Chan];
-	pBuffer->m_mtgmm = new long* [Chan];
-	pBuffer->m_cubgmm = new long** [Chan];
+	pBuffer->m_mtgmm = new int* [Chan];
+	pBuffer->m_cubgmm = new int** [Chan];
 
 	// Channel loop
 	for( i=0; i<Chan; i++ ) {
 		// Allocate long buffers
-		pBuffer->m_dmat[i] = new long [N + 1];
+		pBuffer->m_dmat[i] = new int [N + 1];
 		pBuffer->m_dmat[i][N] = 0;
-		pBuffer->m_stdmat[i] = new long [N]; 
-		pBuffer->m_orgdmat[i] = new long [N];
-		pBuffer->m_asimat[i] = new long [MAXODR];
-		pBuffer->m_puchan[i] = new long [OAA];
+		pBuffer->m_stdmat[i] = new int [N]; 
+		pBuffer->m_orgdmat[i] = new int [N];
+		pBuffer->m_asimat[i] = new int [MAXODR];
+		pBuffer->m_puchan[i] = new int [OAA];
 		//Added for MCC Extension
-		pBuffer->m_tdtau[i] = new long [OAA];
+		pBuffer->m_tdtau[i] = new int [OAA];
 		pBuffer->m_MccMode[i] = new short[OAA];
-		pBuffer->m_mtgmm[i] = new long [Mtap];
-		pBuffer->m_cubgmm[i] = new long* [OAA];
+		pBuffer->m_mtgmm[i] = new int [Mtap];
+		pBuffer->m_cubgmm[i] = new int* [OAA];
 
 		// Initiallize buffers
-		memset( pBuffer->m_dmat[i], 0, (N) * sizeof(long) ); 
-		memset( pBuffer->m_stdmat[i], 0, (N) * sizeof(long) ); 
-		memset( pBuffer->m_orgdmat[i], 0, N * sizeof(long) );
-		memset( pBuffer->m_asimat[i], 0, MAXODR * sizeof(long) );
+		memset( pBuffer->m_dmat[i], 0, (N) * sizeof(int) ); 
+		memset( pBuffer->m_stdmat[i], 0, (N) * sizeof(int) ); 
+		memset( pBuffer->m_orgdmat[i], 0, N * sizeof(int) );
+		memset( pBuffer->m_asimat[i], 0, MAXODR * sizeof(int) );
 		//Added for MCC Extension
-		memset( pBuffer->m_tdtau[i], 0, OAA * sizeof(long) );
+		memset( pBuffer->m_tdtau[i], 0, OAA * sizeof(int) );
 		memset( pBuffer->m_MccMode[i], 0, OAA * sizeof(short) );
-		memset( pBuffer->m_mtgmm[i], 0, Mtap * sizeof(long) );
+		memset( pBuffer->m_mtgmm[i], 0, Mtap * sizeof(int) );
 		for( j=0; j<OAA; j++ )
 		{
 			pBuffer->m_puchan[i][j] = i;
-			pBuffer->m_cubgmm[i][j] = new long [Mtap];
+			pBuffer->m_cubgmm[i][j] = new int [Mtap];
 			for(k = 0; k < Mtap; k++) pBuffer->m_cubgmm[i][j][k] = 0;
 		}
 	}
@@ -142,17 +144,17 @@ void	AllocateMccEncBuffer( MCC_ENC_BUFFER* pBuffer, long Chan, long N, short Res
 	// Allocate buffers
 	BytesPerSample = ((long)((Res+7)/8)+1)*N*2 + (4L*MAXODR + 128)*32;
 	pBuffer->m_xpara = new char [Chan];
-	pBuffer->m_tmppuchan = new long [Chan];
-	pBuffer->m_gmmodr = new long [Chan];
+	pBuffer->m_tmppuchan = new int [Chan];
+	pBuffer->m_gmmodr = new int [Chan];
 	pBuffer->m_shift = new short [Chan];
 	pBuffer->m_optP = new short [Chan];
-	pBuffer->m_puch = new long [OAA];
-	pBuffer->m_mccasi = new long [MAXODR];
+	pBuffer->m_puch = new int [OAA];
+	pBuffer->m_mccasi = new int [MAXODR];
 	pBuffer->m_tmpbuf1 = new unsigned char [BytesPerSample];
 	pBuffer->m_tmpbuf2 = new unsigned char [BytesPerSample];		// Buffer for original residual
 	pBuffer->m_tmpbuf3 = new unsigned char [BytesPerSample];
 	//Added for MCC Extension
-	pBuffer->m_tmptdtau = new long [Chan];
+	pBuffer->m_tmptdtau = new int [Chan];
 	pBuffer->m_tmpMM = new short[Chan];
 
 	// Allocate buffers for LTP
@@ -260,34 +262,34 @@ void	AllocateMccDecBuffer( MCC_DEC_BUFFER* pBuffer, long Chan, long N )
 	long	i, j, k;
 
 	// Allocate buffers for pointers
-	pBuffer->m_dmat = new long* [Chan];
-	pBuffer->m_parqmat = new long* [Chan];
-	pBuffer->m_puchan = new long* [Chan];
+	pBuffer->m_dmat = new int* [Chan];
+	pBuffer->m_parqmat = new int* [Chan];
+	pBuffer->m_puchan = new int* [Chan];
 	//Added for MCC Extension
-	pBuffer->m_tdtau = new long* [Chan];
+	pBuffer->m_tdtau = new int* [Chan];
 	pBuffer->m_MccMode = new short* [Chan];
-	pBuffer->m_mtgmm = new long* [Chan];
-	pBuffer->m_cubgmm = new long** [Chan];
+	pBuffer->m_mtgmm = new int* [Chan];
+	pBuffer->m_cubgmm = new int** [Chan];
 
 	// Channel loop
 	for( i=0; i<Chan; i++ ) {
-		// Allocate long buffers
-		pBuffer->m_dmat[i] = new long [N]; 
-		pBuffer->m_parqmat[i] = new long [MAXODR];
-		pBuffer->m_puchan[i] = new long [OAA];
+		// Allocate int buffers
+		pBuffer->m_dmat[i] = new int [N]; 
+		pBuffer->m_parqmat[i] = new int [MAXODR];
+		pBuffer->m_puchan[i] = new int [OAA];
 		//Added for MCC Extension
-		pBuffer->m_tdtau[i] = new long [OAA];
+		pBuffer->m_tdtau[i] = new int [OAA];
 		pBuffer->m_MccMode[i] = new short[OAA];
-		pBuffer->m_mtgmm[i] = new long [Mtap];
-		pBuffer->m_cubgmm[i] = new long* [OAA];
+		pBuffer->m_mtgmm[i] = new int [Mtap];
+		pBuffer->m_cubgmm[i] = new int* [OAA];
 
 		// Initialize buffers
-		memset( pBuffer->m_dmat[i], 0, N * sizeof(long) );
-		memset( pBuffer->m_parqmat[i], 0, MAXODR * sizeof(long) );
+		memset( pBuffer->m_dmat[i], 0, N * sizeof(int) );
+		memset( pBuffer->m_parqmat[i], 0, MAXODR * sizeof(int) );
 		for(j = 0; j < OAA; j++ )
 		{
 			pBuffer->m_puchan[i][j] = i;
-			pBuffer->m_cubgmm[i][j] = new long [Mtap];
+			pBuffer->m_cubgmm[i][j] = new int [Mtap];
 			for(k = 0; k  <Mtap; k++) pBuffer->m_cubgmm[i][j][k] = 0;
 		}
 	}
@@ -296,15 +298,15 @@ void	AllocateMccDecBuffer( MCC_DEC_BUFFER* pBuffer, long Chan, long N )
 	pBuffer->m_xpara = new char [Chan];
 	pBuffer->m_shift = new short [Chan];
 	pBuffer->m_optP = new short [Chan];
-	pBuffer->m_mccparq = new long [MAXODR];
-	pBuffer->m_puch = new long [OAA];
-	pBuffer->m_tmppuchan = new long [Chan];
+	pBuffer->m_mccparq = new int [MAXODR];
+	pBuffer->m_puch = new int [OAA];
+	pBuffer->m_tmppuchan = new int [Chan];
 	//Added for MCC Extension
-	pBuffer->m_tmptdtau = new long [Chan];
+	pBuffer->m_tmptdtau = new int [Chan];
 	pBuffer->m_tmpMM = new short[Chan];
 
 	memset( pBuffer->m_xpara, 0, Chan * sizeof(char) );
-	memset( pBuffer->m_mccparq, 0, MAXODR * sizeof(long) );
+	memset( pBuffer->m_mccparq, 0, MAXODR * sizeof(int) );
 
 	// Allocate buffers for LTP
 	pBuffer->m_Ltp.Allocate( Chan, N );
@@ -408,8 +410,8 @@ int double_comp(const void *al, const void *be)
 // N = Number of samples per frame
 void	CLtpBuffer::Allocate( long N )
 {
-	m_ltpmat = new long [ N + 2048 ];
-	memset( m_ltpmat, 0, sizeof(long) * ( N + 2048 ) );
+	m_ltpmat = new int [ N + 2048 ];
+	memset( m_ltpmat, 0, sizeof(int) * ( N + 2048 ) );
 }
 
 ////////////////////////////////////////
@@ -465,7 +467,7 @@ void	CLtp::Free( void )
 //              Encoding              //
 //                                    //
 ////////////////////////////////////////
-void	CLtp::Encode( long Channel, long* d, unsigned char* bytebuf, long N, long Freq, CBitIO* out )
+void	CLtp::Encode( long Channel, int* d, unsigned char* bytebuf, long N, long Freq, CBitIO* out )
 {
 	CLtpBuffer*	pLtpBuf = m_pBuffer + Channel;
 	short*		pcoef_multi = pLtpBuf->m_pcoef_multi;
@@ -496,7 +498,7 @@ void	CLtp::Decode( long Channel, long N, long Freq, CBitIO* in )
 {
 	CLtpBuffer*		pLtpBuf = m_pBuffer + Channel;
 	short*			pcoef_multi = pLtpBuf->m_pcoef_multi;
-	unsigned long	u;
+	unsigned int	u;
 	short			lagbit;
 	short			ricep = 2;	// Rice parameter
 
@@ -522,7 +524,7 @@ void	CLtp::Decode( long Channel, long N, long Freq, CBitIO* in )
 //         Pitch subtraction          //
 //                                    //
 ////////////////////////////////////////
-void	CLtp::PitchSubtract( CLtpBuffer* pOutput, long* d, long* d0, long N, short P, long Freq, short Pitch )
+void	CLtp::PitchSubtract( CLtpBuffer* pOutput, int* d, int* d0, long N, short P, long Freq, short Pitch )
 {
 	short	ival;
 	short	step = 8;
@@ -545,7 +547,7 @@ void	CLtp::PitchSubtract( CLtpBuffer* pOutput, long* d, long* d0, long N, short 
 //        Pitch reconstruction        //
 //                                    //
 ////////////////////////////////////////
-void	CLtp::PitchReconstruct( long* d, long N, short P, long Channel, long Freq )
+void	CLtp::PitchReconstruct( int* d, long N, short P, long Channel, long Freq )
 {
 	CLtpBuffer*	pLtpBuf = m_pBuffer + Channel;
 	short	ival;
@@ -567,7 +569,7 @@ void	CLtp::PitchReconstruct( long* d, long N, short P, long Channel, long Freq )
 //           Pitch detector           //
 //                                    //
 ////////////////////////////////////////
-void	CLtp::PitchDetector( CLtpBuffer* pOutput, long *d, long N, short P, long Freq, short Pitch )
+void	CLtp::PitchDetector( CLtpBuffer* pOutput, int *d, long N, short P, long Freq, short Pitch )
 {
 	short	Lag, gainlevel = 16;
 	short	step = 8;
@@ -593,7 +595,7 @@ void	CLtp::PitchDetector( CLtpBuffer* pOutput, long *d, long N, short P, long Fr
 
 	long end=2048;
 	if (end>N) end= N;
-	if ( Lag + start > end - 2 ) Lag = end - start - 3;
+	if ( Lag + start > end - 3 ) Lag = end - start - 3;
 	Maxtau = start + Lag;
 
 	if(N <= start || Lag <= 0 )
@@ -727,7 +729,7 @@ void	CLtp::PitchDetector( CLtpBuffer* pOutput, long *d, long N, short P, long Fr
 //             Add multi              //
 //                                    //
 ////////////////////////////////////////
-void	CLtp::AddMulti( long* d, long end, short ival, const short* qcf, short m )
+void	CLtp::AddMulti( int* d, long end, short ival, const short* qcf, short m )
 {
 	short	j;
 	long	smpl;
@@ -735,7 +737,7 @@ void	CLtp::AddMulti( long* d, long end, short ival, const short* qcf, short m )
 
 	for( smpl=0; smpl<end; smpl++ ) {
 		for( u=1<<6, j=-m/2; j<=m/2; j++ ) u += static_cast<INT64>( qcf[m/2+j] ) * d[smpl-ival+j];
-		d[smpl] += static_cast<long>( u >> 7 );	// gain = qcf / 128
+		d[smpl] += static_cast<int>( u >> 7 );	// gain = qcf / 128
 	}
 }
 
@@ -744,7 +746,7 @@ void	CLtp::AddMulti( long* d, long end, short ival, const short* qcf, short m )
 //             Sub multi              //
 //                                    //
 ////////////////////////////////////////
-void	CLtp::SubMulti( const long* d, long* dout, long end, short ival, const short* qcf, short m )
+void	CLtp::SubMulti( const int* d, int* dout, long end, short ival, const short* qcf, short m )
 {
 	short	j;
 	long	smpl;
@@ -752,7 +754,7 @@ void	CLtp::SubMulti( const long* d, long* dout, long end, short ival, const shor
 
 	for( smpl=0; smpl<end; smpl++ ) {
 		for( u=1<<6, j=-m/2; j<=m/2; j++ ) u += static_cast<INT64>( qcf[m/2+j] ) * d[smpl-ival+j];
-		dout[smpl] = d[smpl] - static_cast<long>( u >> 7 );
+		dout[smpl] = d[smpl] - static_cast<int>( u >> 7 );
 	}
 }
 
@@ -877,7 +879,7 @@ unsigned int	CLtp::GetBit( BITIO* p )
 // Search Time Difference //
 ///////////////////////////
 
-long GetTimeDiff(long *sdmas, long *sdsla, long N, long MaxTau)
+long GetTimeDiff(int *sdmas, int *sdsla, long N, long MaxTau)
 {
 	long smpl,outtau=3,tau;
 	double powin=0.0,maxpow=0.0;
@@ -937,7 +939,7 @@ long GetTimeDiff(long *sdmas, long *sdsla, long N, long MaxTau)
 	return(outtau);
 }
 
-long GetTimeDiff0(long *sdmas, long *sdsla, long N, long MaxTau)
+long GetTimeDiff0(int *sdmas, int *sdsla, long N, long MaxTau)
 {
 //include Tau=0
 	long smpl,outtau=3,tau;
@@ -1007,14 +1009,14 @@ long GetTimeDiff0(long *sdmas, long *sdsla, long N, long MaxTau)
 
 void	SubtractResidualTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N , short MccMode)
 {
-	long**	dmat = pBuffer->m_dmat;
-	long*	puchan = pBuffer->m_tmppuchan;
+	int**	dmat = pBuffer->m_dmat;
+	int*	puchan = pBuffer->m_tmppuchan;
 	char*	xpara = pBuffer->m_xpara;
-	long*	tdtau = pBuffer->m_tmptdtau;
-	long**	mtgmm = pBuffer->m_mtgmm;
+	int*	tdtau = pBuffer->m_tmptdtau;
+	int**	mtgmm = pBuffer->m_mtgmm;
 	long	maxtau = pBuffer->m_MaxTau;
-	long	smpl, cnl, *sdmas, *sdsla, *sdmasbd, *sdslabd;
-	long**	stackdmat;
+	int	smpl, cnl, *sdmas, *sdsla, *sdmasbd, *sdslabd;
+	int**	stackdmat;
 	INT64 regg;
 
 	short gmmtable[32]={ 204, 192, 179, 166, 153, 140, 128, 115,
@@ -1022,22 +1024,22 @@ void	SubtractResidualTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N , short MccM
 						   0, -12, -25, -38, -51, -64, -76, -89,
 						-102,-115,-128,-140,-153,-166,-179,-192};
 	
-	stackdmat = new long* [Chan];
+	stackdmat = new int* [Chan];
 	long ss, se;
-	long *pdmat, *pdmatp, *pdmatt;
+	int *pdmat, *pdmatp, *pdmatt;
 	short gain[6];
 	short ic;
 
-	sdmasbd = new long[N+((maxtau+1)*2)];
-	sdslabd = new long[N+((maxtau+1)*2)];
+	sdmasbd = new int[N+((maxtau+1)*2)];
+	sdslabd = new int[N+((maxtau+1)*2)];
 	sdmas = sdmasbd + (maxtau+1);
 	sdsla = sdslabd + (maxtau+1);
-	memset( sdmasbd, 0, (N+((maxtau+1)*2)) * sizeof(long) );
-	memset( sdslabd, 0, (N+((maxtau+1)*2)) * sizeof(long) );
+	memset( sdmasbd, 0, (N+((maxtau+1)*2)) * sizeof(int) );
+	memset( sdslabd, 0, (N+((maxtau+1)*2)) * sizeof(int) );
 	
 	for( cnl=0; cnl<Chan; cnl++ ) {
-		 stackdmat[cnl] = new long [N];
-		 memcpy( stackdmat[cnl], dmat[cnl], N * sizeof(long) );
+		 stackdmat[cnl] = new int [N];
+		 memcpy( stackdmat[cnl], dmat[cnl], N * sizeof(int) );
 	}
 
 	for( cnl=0; cnl<Chan; cnl++ ) {	// Subtract Loop
@@ -1047,8 +1049,8 @@ void	SubtractResidualTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N , short MccM
 		} 
 		else 
 		{
-			memcpy( sdmas, stackdmat[puchan[cnl]], N * sizeof(long) );
-			memcpy( sdsla, stackdmat[cnl], N * sizeof(long) );
+			memcpy( sdmas, stackdmat[puchan[cnl]], N * sizeof(int) );
+			memcpy( sdsla, stackdmat[cnl], N * sizeof(int) );
 			pdmat=stackdmat[puchan[cnl]];
 			if(MccMode==1)
 			{
@@ -1063,7 +1065,7 @@ void	SubtractResidualTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N , short MccM
 					{
 						regg+=static_cast<INT64>(pdmatp[ic])*gain[ic];
 					}
-					dmat[cnl][smpl] -= static_cast<long>(regg>>7);  //qcf / 128
+					dmat[cnl][smpl] -= static_cast<int>(regg>>7);  //qcf / 128
 #else
 					dmat[cnl][smpl] -= ( ( stackdmat[puchan[cnl]][smpl-1] * gmmtable[mtgmm[cnl][0]] ) / 128 
 									   + ( stackdmat[puchan[cnl]][smpl] * gmmtable[mtgmm[cnl][1]] ) / 128 
@@ -1088,7 +1090,7 @@ void	SubtractResidualTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N , short MccM
 						regg+=static_cast<INT64>(pdmatp[ic])*gain[ic]
 							 +static_cast<INT64>(pdmatt[ic])*gain[ic+3];
 					}
-					dmat[cnl][smpl] -= static_cast<long>(regg>>7);  //qcf / 128
+					dmat[cnl][smpl] -= static_cast<int>(regg>>7);  //qcf / 128
 
 #else		
 					dmat[cnl][smpl] -= ( ( stackdmat[puchan[cnl]][smpl-1] * gmmtable[mtgmm[cnl][0]] ) / 128 
@@ -1116,12 +1118,12 @@ void	SubtractResidualTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N , short MccM
 
 void	ReconstructResidualTD( MCC_DEC_BUFFER* pBuffer, long Chan, long N )
 {
-	long**	dmat = pBuffer->m_dmat;
-	long*	puchan = pBuffer->m_tmppuchan;
+	int**	dmat = pBuffer->m_dmat;
+	int*	puchan = pBuffer->m_tmppuchan;
 	char*	xpara = pBuffer->m_xpara;
-	long*	tdtau = pBuffer->m_tmptdtau;
+	int*	tdtau = pBuffer->m_tmptdtau;
 	short*	MccMode = pBuffer->m_tmpMM;
-	long**	mtgmm = pBuffer->m_mtgmm;
+	int**	mtgmm = pBuffer->m_mtgmm;
 	long	smpl, cnl, stopflag;
 	char*	endflag;
 	INT64 regg;
@@ -1134,13 +1136,13 @@ void	ReconstructResidualTD( MCC_DEC_BUFFER* pBuffer, long Chan, long N )
 	long ss, se;
 	memset( endflag, 0, Chan );
 	stopflag = 0;
-	long *pdmat, *pdmatp, *pdmatt, *dref;
+	int *pdmat, *pdmatp, *pdmatt, *dref;
 	short gain[6];
 	short ic;
 	short maxtau = 130;
-	dref = new long[N+((maxtau+1)*2)];
+	dref = new int[N+((maxtau+1)*2)];
 	pdmat = dref + (maxtau+1);
-	memset( dref, 0, (N+((maxtau+1)*2)) * sizeof(long) );
+	memset( dref, 0, (N+((maxtau+1)*2)) * sizeof(int) );
 
 	for( cnl=0; cnl<Chan; cnl++ ) {	//At First,Get Original
 		if ( xpara[cnl] ) {
@@ -1156,7 +1158,7 @@ void	ReconstructResidualTD( MCC_DEC_BUFFER* pBuffer, long Chan, long N )
 	if(!stopflag)
 	{
 		fprintf( stderr, "\nInvalid bit stream!\n" );
-		exit(1);
+		exit(3);
 	}
 	// Recover Loop
 	do {
@@ -1174,7 +1176,7 @@ void	ReconstructResidualTD( MCC_DEC_BUFFER* pBuffer, long Chan, long N )
 						{
 							regg+=static_cast<INT64>(pdmatp[ic])*gain[ic];
 						}
-						dmat[cnl][smpl] += static_cast<long>(regg>>7);  //qcf / 128
+						dmat[cnl][smpl] += static_cast<int>(regg>>7);  //qcf / 128
 #else				
 						dmat[cnl][smpl] += (( dmat[puchan[cnl]][smpl-1] * gmmtable[mtgmm[cnl][0]] ) / 128 
 										   +( dmat[puchan[cnl]][smpl] * gmmtable[mtgmm[cnl][1]] ) / 128 
@@ -1197,7 +1199,7 @@ void	ReconstructResidualTD( MCC_DEC_BUFFER* pBuffer, long Chan, long N )
 							regg+=static_cast<INT64>(pdmatp[ic])*gain[ic]
 								 +static_cast<INT64>(pdmatt[ic])*gain[ic+3];
 						}
-						dmat[cnl][smpl] += static_cast<long>(regg>>7);  //qcf / 128
+						dmat[cnl][smpl] += static_cast<int>(regg>>7);  //qcf / 128
 #else		
 						dmat[cnl][smpl] += ( ( dmat[puchan[cnl]][smpl-1] * gmmtable[mtgmm[cnl][0]] ) / 128 
 										   +( dmat[puchan[cnl]][smpl]   * gmmtable[mtgmm[cnl][1]] ) / 128 
@@ -1228,27 +1230,27 @@ void	ReconstructResidualTD( MCC_DEC_BUFFER* pBuffer, long Chan, long N )
 
 void	CheckFrameDistanceTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N, long MCCval )
 {
-	long**	dmat = pBuffer->m_dmat;
-	long*	puchan = pBuffer->m_tmppuchan;
+	int**	dmat = pBuffer->m_dmat;
+	int*	puchan = pBuffer->m_tmppuchan;
 	char*	xpara = pBuffer->m_xpara;
 	long	maxtau = pBuffer->m_MaxTau;
 	long	NumMat, rowi, colj, smpl, cnl, ntm, stopflag, cnlmas, cnlsla, nbest, tdtau;
 	long	Nclus;
 	long	ite;
-	long*	dmas;
-	long*	dsla;
+	int*	dmas;
+	int*	dsla;
 	long ss, se;
 	double	powsla, powmas, powin, tmppow, tmpcos, tsdist;
 	CHANDISTMAT*	DistanceEandS;
 	CHANDISTMAT*	DistanceEonly;
-	long*	endflag;
+	int*	endflag;
 
 	Nclus = MCCval;
 
 	Chan /= Nclus;
 	NumMat = Chan * Chan;
-	dmas = new long [N];
-	dsla = new long [N];
+	dmas = new int [N];
+	dsla = new int [N];
 
 	DistanceEandS = new CHANDISTMAT [NumMat];
 	DistanceEonly = new CHANDISTMAT [NumMat];
@@ -1257,13 +1259,13 @@ void	CheckFrameDistanceTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N, long MCCv
 		DistanceEonly[ntm].chandist = 0.0;
 	}
 
-	endflag = new long [ Chan * Nclus ];
+	endflag = new int [ Chan * Nclus ];
 
 	for( ite=0; ite<Nclus; ite++ ) {
 		for( cnl=ite*Chan; cnl<Chan*(ite+1); cnl++ ) endflag[cnl] = 0;
 		ntm = 0;
 		for( rowi=ite*Chan; rowi<ite*Chan+Chan; rowi++ ) {	// Difference
-			memcpy( dsla, dmat[rowi], N * sizeof(long) );
+			memcpy( dsla, dmat[rowi], N * sizeof(int) );
 			tmppow = 0.0;
 			powsla = 0.0;
 			for( smpl=0; smpl<N; smpl++ ) {
@@ -1292,7 +1294,7 @@ void	CheckFrameDistanceTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N, long MCCv
 					DistanceEonly[ntm].chansla = rowi;
 
 				} else {
-					memcpy( dmas, dmat[colj], N * sizeof(long) );
+					memcpy( dmas, dmat[colj], N * sizeof(int) );
 					tmppow = 0.0;
 					powmas = 0.0;
 					tmpcos = 0.0;
@@ -1396,7 +1398,7 @@ void	CheckFrameDistanceTD( MCC_ENC_BUFFER* pBuffer, long Chan, long N, long MCCv
 // Calculate 3-tap Weighting Factors (encoder) //
 /////////////////////////////////////////////////
 
-void GetGammaMulti3Tap(long *sdmas, long *sdsla, long N, long *vgmm, long Tau)
+void GetGammaMulti3Tap(int *sdmas, int *sdsla, long N, int *vgmm, long Tau)
 {
 	double gmm=0.0,tmpy=0.0, tmpz=0.0, tmpw=0.0, tmpv=0.0, ytz=0.0, ytw=0.0, ytv=0.0, ztz=0.0, wtw=0.0, vtv=0.0, ztw=0.0, ztv=0.0, wtv=0.0;
 	long dimn=3,di,smpl;
@@ -1460,7 +1462,7 @@ void GetGammaMulti3Tap(long *sdmas, long *sdsla, long N, long *vgmm, long Tau)
 // Calculate 6-tap Weighting Factors (encoder) //
 /////////////////////////////////////////////////
 
-void GetGammaMulti6Tap(long *sdmas, long *sdsla, long N, long *vgmm, long Tau)
+void GetGammaMulti6Tap(int *sdmas, int *sdsla, long N, int *vgmm, long Tau)
 {
 	double gmm=0.0,
 		tmpy=0.0, tmpz=0.0, tmpw=0.0, tmpv=0.0, tmpu=0.0, tmps=0.0, tmpt=0.0,

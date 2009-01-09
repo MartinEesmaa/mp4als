@@ -162,6 +162,53 @@ contents : Implementation of the CLpacEncoder class
  * 07/14/2006, Noboru Harada <n-harada@theory.brl.ntt.co.jp>
  *   - added safty measures for some memcopy oprerations.
  *
+ * 05/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - supported 64-bit data size.
+ *   - replaced FILE* with HALSSTREAM.
+ *   - supported Sony Wave64 and BWF with RF64 formats.
+ *
+ * 05/25/2007, Nobory Harada <n-harada@theory.brl.ntt.co.jp>
+ *   - debugged.
+ *
+ * 06/08/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added return values of CLpacEncoder::WriteHeader() to distinguish 
+ *     error causes.
+ *
+ * 06/18/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - debugged file_type in ALS header.
+ *   - debugged maximum value of samples, header size and trailer size
+ *     in ALS header.
+ *
+ * 07/02/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - debugged WriteHeader() in case that header/trailer size is less 
+ *     than 4GB, but too big to allocate.
+ *
+ * 07/15/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - added oafi_flag and supported ALSSpecificConfig with header and 
+ *     trailer embedded.
+ *
+ * 05/14/2008, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - supported WAV files with WAVEFORMATEXTENSIBLE.
+ *
+ * 10/20/2008, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - debugged the bit location of js_switch in frame_data.
+ *   - debugged the limitation of 2nd and 3rd rice parameters to 15 
+ *     in case of Res<=16.
+ *   - debugged EncodeBlockCoding() to handle IntRes=20 properly.
+ *   - debugged maximum prediction order calculation.
+ *
+ * 10/22/2008, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - moved LPC_ADAPT symbol definition to project file/Makefile.
+ *   - modified process exit code.
+ *
+ * 10/23/2008, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - replaced ceil( double ) with ceil( float ) to avoid g++ bug.
+ *
+ * 11/28/2008, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - rewritten the formula for calculating the bit-width of the prediction
+ *     order using integer operations (instead of floating-point).
+ *   - fixed some printf format strings
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -171,7 +218,7 @@ contents : Implementation of the CLpacEncoder class
 #include <stdlib.h>
 #include <assert.h>
 
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 	#include <io.h>
 	#include <fcntl.h>
 #endif
@@ -187,14 +234,24 @@ contents : Implementation of the CLpacEncoder class
 #include "floating.h"
 #include "lpc_adapt.h"
 #include "mcc.h"
+#include "stream.h"
 
 #define PI 3.14159265359
 
 #define min(a, b)  (((a) < (b)) ? (a) : (b))
 #define max(a, b)  (((a) > (b)) ? (a) : (b))
 
-// Define LPC_ADAPT when using lpc_adapt.obj/lpc_adapt.o
-#define	LPC_ADAPT
+namespace {
+
+int ilog2_ceil(unsigned int x) {
+	if (x == 0) return -1;
+
+	int l = 0;
+	while ((l < sizeof(x)*8) && ((1u << l) < x)) ++l;
+	return l;
+}
+
+} /* namespace */
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Constructor
@@ -235,6 +292,10 @@ CLpacEncoder::CLpacEncoder()
 	ChanConfig = 0;	// Channel configuration = off
 	CRCenabled = 1;	// CRC = on
 	ChPos = NULL;	// No channel sorting table defined
+	CloseInput = CloseOutput = false;
+	frames = 0;
+	mp4file = false;
+	oafi_flag = false;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -312,98 +373,85 @@ CLpacEncoder::~CLpacEncoder()
 // Close input and output file
 short CLpacEncoder::CloseFiles()
 {
-	if (fpInput != NULL)
-		if (fclose(fpInput))
-			return(1);
-	fpInput = NULL;
+	if ( fpInput ) {
+		if ( CloseInput ) fclose( fpInput );
+		fpInput = NULL;
+		CloseInput = false;
+	}
 
-	if (fpOutput != NULL)
-		if (fclose(fpOutput))
-			return(2);
-	fpOutput = NULL;
-
-	return(0);
+	if ( fpOutput ) {
+		if ( CloseOutput ) fclose( fpOutput );
+		fpOutput = NULL;
+		CloseOutput = false;
+	}
+	return 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Get positions of file pointers
-void CLpacEncoder::GetFilePositions(long *SizeIn, long *SizeOut)
+void CLpacEncoder::GetFilePositions(ALS_INT64 *SizeIn, ALS_INT64 *SizeOut)
 {
 	*SizeIn = ftell(fpInput);
 	*SizeOut = ftell(fpOutput);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// Open input file
-short CLpacEncoder::OpenInputFile(const char *name)
-{
-	if (name[0] == ' ')
-	{
-		fpInput = stdin;
-#ifdef WIN32
-		if (_setmode(_fileno(stdin), _O_BINARY) == -1)
-		{
-			fprintf(stderr, "Cannot set 'stdin' mode\n");
-			return(1);
-		}
-#endif
-	}
-	else if (!(fpInput = fopen(name, "rb")))
-		return(2);
-
-	return(0);
-};
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
 // Retrieve information from audio file
 short CLpacEncoder::AnalyseInputFile(AUDIOINFO *ainfo)
 {
-	ULONG DataLen, FileLen;
+	ALS_INT64 DataLen, FileLen;
 	WAVEFORMATPCM wf;
 	AIFFCOMMON ac;
-	ULONG Offset, BlockSize, samplerate;
+	UINT samplerate;
+	ALS_INT64 Offset, BlockSize;
+	USHORT	BitWidth;
 
-	if (RawAudio)
-	{
-		FileType = 0;		// RAW
+	try {
+		if ( RawAudio ) throw 0;	// RAW
+		
+		// Try wave format
+		HeaderSize = GetWaveFormatPCM( fpInput, &wf, &Samples );
+		if ( HeaderSize >= 0 ) throw 1;	// WAVE
+		
+		// Try aiff format
+		rewind( fpInput );
+		HeaderSize = GetAiffFormat( fpInput, &ac, &Offset, &BlockSize, &samplerate );
+		if ( HeaderSize >= 0 ) { MSBfirst = 1; throw 2; }	// AIFF
+		
+		// Try Sony Wave64 format
+		rewind( fpInput );
+		HeaderSize = GetWave64FormatPCM( fpInput, &wf, &Samples );
+		if ( HeaderSize >= 0 ) throw 4;	// Sony Wave64
+		
+		// Try bwf with RF64 format
+		rewind( fpInput );
+		HeaderSize = GetRF64FormatPCM( fpInput, &wf, &Samples );
+		if ( HeaderSize >= 0 ) throw 5;	// BWF with RF64
+		
+		return -1;	// Unknown file type
 	}
-	else	// Analyze input file (try wave format first)
-	{
-		HeaderSize = GetWaveFormatPCM(fpInput, &wf, &Samples);
-		if (HeaderSize == 0)
-		{
-			// Try aiff format
-			rewind(fpInput);
-			HeaderSize = GetAiffFormat(fpInput, &ac, &Offset, &BlockSize, &samplerate);
-			if (HeaderSize == 0)
-				return(-1);
-			else
-			{
-				FileType = 2;	// AIFF
-				MSBfirst = 1;
-			}
-		}
-		else
-			FileType = 1;		// WAVE
+	catch( int ft ) {
+		FileType = static_cast<short>( ft );
 	}
 
 	fseek(fpInput, 0L, SEEK_END);
 	FileLen = ftell(fpInput);
 	rewind(fpInput);
 
-	if (FileType == 1)
+	if ( ( FileType == 1 ) || ( FileType == 3 ) || ( FileType == 4 ) || ( FileType == 5 ) )
 	{
 		Chan = wf.Channels;
 		Freq = wf.SamplesPerSec;
-		Res = wf.BitsPerSample;
+		Res = wf.ValidBitsPerSample;
 		DataLen = Samples * wf.BlockAlign;
+		BitWidth = wf.BitsPerSample;
 
-		// Discover floating point format
-		if ( wf.FormatTag == 1 ) {
+		// Check format
+		if ( wf.FormatTag == 1 ) {				//WAVE_FORMAT_PCM
 			// Integer PCM
 			SampleType = 0;
 			IntRes = Res;
-		} else if ( wf.FormatTag == 3 ) {
+		} else if ( wf.FormatTag == 3 ) {		//WAVE_FORMAT_IEEE_FLOAT
 			// Floating point PCM
 			SampleType = 1;
 			IntRes = IEEE754_PCM_RESOLUTION;
@@ -416,7 +464,7 @@ short CLpacEncoder::AnalyseInputFile(AUDIOINFO *ainfo)
 	{
 		Samples = ac.SampleFrames;
 		Chan = ac.Channels;
-		IntRes = Res = ac.SampleSize;
+		BitWidth = IntRes = Res = ac.SampleSize;
 		SampleType = 0;
 		Freq = samplerate;
 		DataLen = Samples * Chan * (Res / 8);
@@ -426,6 +474,7 @@ short CLpacEncoder::AnalyseInputFile(AUDIOINFO *ainfo)
 		if ((FileLen - HeaderSize) % (Chan * (Res / 8)))
 			return(-1);
 		Samples = (FileLen - HeaderSize) / (Chan * (Res / 8));
+		BitWidth = Res;
 	}
 
 	if (FileType != 0)
@@ -440,9 +489,11 @@ short CLpacEncoder::AnalyseInputFile(AUDIOINFO *ainfo)
 	}
 
 	// Check parameters
-	if ((Res > 32) || (Res < 1))
+	if ((BitWidth > 32) || (BitWidth < 1) || (BitWidth < Res))
 		return(-1);
-	else if ((Res < 32) && (Res > 24))
+	if ( BitWidth > Res ) LSBcheck = 1;
+	Res = BitWidth;
+	if ((Res < 32) && (Res > 24))
 	{
 		Res = 32;			// Interpret data as 32-bit
 		LSBcheck = 1;		// Check LSBs
@@ -500,37 +551,17 @@ short CLpacEncoder::SpecifyAudioInfo(AUDIOINFO *ainfo)
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// Open output file
-short CLpacEncoder::OpenOutputFile(const char *name)
-{
-	if (name[0] == ' ')
-	{
-		fpOutput = stdout;
-#ifdef WIN32
-		if (_setmode(_fileno(stdout), _O_BINARY) == -1)
-		{
-			fprintf(stderr, "Cannot set 'stdout' mode\n");
-			return(1);
-		}
-#endif
-	}
-	else if (!(fpOutput = fopen(name, "wb")))
-	{
-		fclose(fpInput);
-		return(2);
-	}
-
-	return(0);
-};
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
 // Generate and write header
-long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
+ALS_INT64 CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 {
 	BYTE audiotyp, tmp = 0;
 	long i, j, rest;
 
-	short AUXenabled = 0;	// set AUXenabled = 1 to generate aux data (see below)
+#ifdef ALS_VERSION_INFO
+	short AUXenabled = 1;	// set AUXenabled = 1 to generate aux data (see below)
+#else
+	short AUXenabled = 0;	// set AUXenabled = 0 not to generate aux data (see below)
+#endif
 
 #ifndef	LPC_ADAPT
 	Adapt = 0;
@@ -582,7 +613,7 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 
 	// Number of frames
 	frames = Samples / N;
-	rest = Samples % N;
+	rest = static_cast<long>( Samples % N );
 	if (rest)
 	{
 		frames++;
@@ -608,20 +639,21 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 			RA = 255;
 
 		// number of random acess units
-		RAUnits = frames / RA;
+		if ( frames / RA > 0x7fffffff ) return ( frames = -3 );
+		RAUnits = static_cast<long>( frames / RA );
 		if (frames % RA)
 			RAUnits++;
 		RAUid = 0;			// RAU index (0..RAUnits-1)
 	}
 
 	// Allocate memory (will be deallocated by the destructor)
-	xp = new long*[Chan];
-	x = new long*[Chan];
+	xp = new int*[Chan];
+	x = new int*[Chan];
 	for (i = 0; i < Chan; i++ )
 	{
-		xp[i] = new long[N+P];
+		xp[i] = new int[N+P];
 		x[i] = xp[i] + P;
-		memset(xp[i], 0, 4*P);
+		memset(xp[i], 0, sizeof(int)*P);
 	}
 
 	if (RLSLMS)
@@ -651,14 +683,14 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 
 		if (Joint)
 		{
-			xps = new long*[CPE];
-			xs = new long*[CPE];
+			xps = new int*[CPE];
+			xs = new int*[CPE];
 
 			for (i = 0; i < CPE; i++)
 			{
-				xps[i] = new long[N+P];
+				xps[i] = new int[N+P];
 				xs[i] = xps[i] + P;
-				memset(xps[i], 0, 4*P);
+				memset(xps[i], 0, sizeof(int)*P);
 			}
 
 			tmpbuf3 = new unsigned char[BufSize];		// Buffer for a difference channel
@@ -693,10 +725,22 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 		tmpbuf_MCC[i] = new unsigned char[BufSize];
 	buffer_m = new unsigned char[4L*N*Chan + 4L*P + N*Chan*IEEE754_BYTES_PER_SAMPLE+100];
 
-	d = new long[N];											// Difference signal (residual)
+	d = new int[N];											// Difference signal (residual)
 	par = new double[P];										// Coefficients (parcor)
-	cof = new long[P];											// Coefficients (direct form, quantized)
-	buff = new unsigned char[max(max(HeaderSize, TrailerSize), (NeedPuchBit*Chan)/8+1)];		// Buffer for audio header/trailer and ChanPos[]
+	cof = new int[P];											// Coefficients (direct form, quantized)
+	size_t buff_size = ( NeedPuchBit * Chan ) / 8 + 1;
+	if ( buff_size < 4 ) buff_size = 4;
+	if ( !mp4file ) {
+		if ( HeaderSize >= 0xffffffff ) return ( frames = -5 );		// ALS can support header up to 4GB.
+		if ( TrailerSize >= 0xffffffff ) return ( frames = -6 );	// ALS can support trailer up to 4GB.
+		if ( buff_size < HeaderSize ) buff_size = static_cast<size_t>( HeaderSize );
+		if ( buff_size < TrailerSize ) buff_size = static_cast<size_t>( TrailerSize );
+	} else if ( !oafi_flag ) {
+		if ( ( HeaderSize < 0xffffffff ) && ( buff_size < HeaderSize ) ) buff_size = static_cast<size_t>( HeaderSize );
+		if ( ( TrailerSize < 0xffffffff ) && ( buff_size < TrailerSize ) ) buff_size = static_cast<size_t>( TrailerSize );
+	}
+	buff = new unsigned char[ buff_size ];		// Buffer for audio header/trailer and ChanPos[]
+	if ( buff == NULL ) return ( frames = -7 );	// Memory error
 
 	// Frame buffer for all channels
 	buffer[0] = new unsigned char[4L*N*Chan + 4L*P + N*Chan*IEEE754_BYTES_PER_SAMPLE+100];					
@@ -709,17 +753,19 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 		SubX = (Sub < 3) ? 1 : Sub - 2;
 
 	// Information about the audio signal
-	if (FileType == 1)
-		audiotyp = 64;				// x1xx xxxx (original = wave file)
-	else if (FileType == 2)
-		audiotyp = 128;				// 1xxx xxxx (original = aiff file)
-	audiotyp += (Chan - 1) << 2;	// xxxX XXxx (1..16 Channels)
-	if (Res == 16)
-		audiotyp += 1;				// xxxx xx01 (16-bit)
-	else if (Res == 24)
-		audiotyp += 2;				// xxxx xx10 (24-bit)
-	else if (Res == 32)
-		audiotyp += 3;				// xxxx xx11 (32-bit)
+	switch( FileType ) {
+	case 1:	audiotyp = 32;	break;		// 001x xxxx (original = wave file)
+	case 2:	audiotyp = 64;	break;		// 010x xxxx (original = aiff file)
+	case 3:	audiotyp = 96;	break;		// 011x xxxx (original = bwf file)
+	case 4:	audiotyp = 0;	break;		// 000x xxxx (original = unknown) Sony Wave64
+	case 5:	audiotyp = 0;	break;		// 000x xxxx (original = unknown) bwf with RF64
+	default:audiotyp = 0;	break;
+	}
+	if (Res == 16) audiotyp += 4;		// xxx0 01xx
+	else if (Res == 24) audiotyp += 8;	// xxx0 10xx
+	else if (Res == 32) audiotyp += 12;	// xxx0 11xx
+	if ( SampleType ) audiotyp += 2;	// xxxx xx1x
+	if ( MSBfirst ) audiotyp += 1;		// xxxx xxx1
 
 	// Select entropy coding table for coefficients via sampling rate, other criteria possible
 	CoefTable = ((Freq / 48000L) >> 1) & 0x03;				// 44k/48k->00, 96k->01, 192k->10
@@ -737,15 +783,20 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	}
 
 	// Write ALS header information ///////////////////////////////////////////////////////////////
-	ULONG als_id;
+	UINT als_id;
 	als_id = 0x414C5300UL;
-	WriteULongMSBfirst(als_id, fpOutput);							// 'ALS' + 0x00
-	WriteULongMSBfirst((ULONG)Freq, fpOutput);						// sampling frequency
-	WriteULongMSBfirst(Samples, fpOutput);							// samples
+	WriteUIntMSBfirst(als_id, fpOutput);							// 'ALS' + 0x00
+	WriteUIntMSBfirst((UINT)Freq, fpOutput);						// sampling frequency
+	if ( mp4file ) {
+		if ( Samples >= 0xffffffff ) WriteUIntMSBfirst( 0xffffffff, fpOutput );	// samples
+		else WriteUIntMSBfirst( static_cast<ALS_UINT32>( Samples ), fpOutput );
+	} else {
+		if ( Samples >= 0xffffffff ) return ( frames = -4 );		// ALS can support samples up to 4GB.
+		WriteUIntMSBfirst( static_cast<ALS_UINT32>( Samples ), fpOutput );
+	}
 	WriteUShortMSBfirst(USHORT(Chan - 1), fpOutput);				// channels
 
-	tmp = (BYTE)((FileType << 5) | ((Res / 8 - 1) << 2) | (SampleType ? 0x02 : 0) | (MSBfirst ? 0x01 : 0));
-	if (fwrite(&tmp, 1, 1, fpOutput) != 1) return(frames = -2);		// FFFRRRSM
+	if (fwrite(&audiotyp, 1, 1, fpOutput) != 1) return(frames = -2);// FFFRRRSM
 
 	WriteUShortMSBfirst(USHORT(N - 1), fpOutput);					// frame length
 
@@ -773,22 +824,35 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 		out.InitBitWrite(buff);
 
 		for (i = 0; i < Chan; i++)
-			out.WriteBits(ULONG(ChPos[i]), NeedPuchBit);
+			out.WriteBits(UINT(ChPos[i]), NeedPuchBit);
 
 		long size = out.EndBitWrite();
 		if (fwrite(buff, 1, size, fpOutput) != size) return(frames = -2);
 	}
 
-	WriteULongMSBfirst((ULONG)HeaderSize, fpOutput);				// header size
-	WriteULongMSBfirst((ULONG)TrailerSize, fpOutput);				// trailer size
+	// Header and trailer sizes
+	if ( oafi_flag ) {
+		WriteUIntMSBfirst( ( HeaderSize > 0 ) ? 0xffffffff : 0, fpOutput );
+		WriteUIntMSBfirst( ( TrailerSize > 0 ) ? 0xffffffff : 0, fpOutput );
+	} else {
+		WriteUIntMSBfirst( static_cast<ALS_UINT32>( HeaderSize ), fpOutput );
+		WriteUIntMSBfirst( static_cast<ALS_UINT32>( TrailerSize ), fpOutput );
+	}
 
-	// copy audio file header (if present)
-	fread(buff, 1, HeaderSize, fpInput);
-	if (fwrite(buff, 1, HeaderSize, fpOutput) != HeaderSize) return(frames = -2);
+	if ( oafi_flag ) {
+		// Skip file header
+		fseek( fpInput, HeaderSize, SEEK_CUR );
+	} else {
+		// copy audio file header (if present)
+		fread( buff, 1, static_cast<ALS_UINT32>( HeaderSize ), fpInput );
+		if ( fwrite( buff, 1, static_cast<ALS_UINT32>( HeaderSize ), fpOutput ) != static_cast<ALS_UINT32>( HeaderSize ) ) return ( frames = -2 );
+	}
 
 	// get current position and write dummy bytes for trailer (if present)
-	FilePos = ftell(fpOutput);
-	if (fwrite(buff, 1, TrailerSize, fpOutput) != TrailerSize) return(frames = -2);
+	FilePos = ftell( fpOutput );
+	if ( !oafi_flag ) {
+		if ( fwrite( buff, 1, static_cast<ALS_UINT32>( TrailerSize ), fpOutput ) != static_cast<ALS_UINT32>( TrailerSize ) ) return ( frames = -2 );
+	}
 
 	if (CRCenabled)
 	{
@@ -801,7 +865,7 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 
 	if (RA && (RAflag == 2))		// save random access info in header
 	{
-		RAUsize = new unsigned long[RAUnits];
+		RAUsize = new unsigned int[RAUnits];
 		// write dummy bytes
 		if (fwrite(RAUsize, 1, RAUnits * 4, fpOutput) != (RAUnits * 4)) return(frames = -2);
 	}
@@ -809,10 +873,12 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	// aud data test
 	if (AUXenabled)
 	{
-		char AUXdata[32] = "This is some auxiliary data!";
-		ULONG AUXsize = sizeof(AUXdata);
-		WriteULongMSBfirst(AUXsize, fpOutput);
-		if (fwrite(AUXdata, 1, AUXsize, fpOutput) != AUXsize) return(frames = -2);
+#if defined( ALS_VERSION_INFO )
+		WriteUIntMSBfirst( sizeof(ALS_VERSION_INFO), fpOutput );
+		if ( fwrite( ALS_VERSION_INFO, 1, sizeof(ALS_VERSION_INFO), fpOutput ) != sizeof(ALS_VERSION_INFO) ) return ( frames = -2 );
+#else
+		WriteUIntMSBfirst( 0, fpOutput );
+#endif
 	}
 
 	// End of header information //////////////////////////////////////////////////////////////////
@@ -822,41 +888,45 @@ long CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Write trailing non-audio data
-long CLpacEncoder::WriteTrailer()
+ALS_INT64 CLpacEncoder::WriteTrailer()
 {
 	long r;
 
 	fseek(fpOutput, FilePos, SEEK_SET);
-
-	fread(buff, 1, TrailerSize, fpInput);
-	if (fwrite(buff, 1, TrailerSize, fpOutput) != TrailerSize) return(frames = -1);
+	
+	if ( oafi_flag ) {
+		fseek( fpInput, TrailerSize, SEEK_CUR );
+	} else {
+		fread( buff, 1, static_cast<ALS_UINT32>( TrailerSize ), fpInput );
+		if ( fwrite( buff, 1, static_cast<ALS_UINT32>( TrailerSize ), fpOutput ) != static_cast<ALS_UINT32>( TrailerSize ) ) return ( frames = -1 );
+	}
 
 	if (CRCenabled)
 	{
 		CRC ^= CRC_MASK;
-		WriteULongMSBfirst(CRC, fpOutput);
+		WriteUIntMSBfirst(CRC, fpOutput);
 	}
 
 	if (RA && (RAflag == 2))		// save random access info in header
 	{
 		for (r = 0; r < RAUnits; r++)
-			WriteULongMSBfirst(RAUsize[r], fpOutput);
+			WriteUIntMSBfirst(RAUsize[r], fpOutput);
 	}
 
 	fseek(fpOutput, 0, SEEK_END);
 
-	return(0);
+	return TrailerSize;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Generate and write header, encoded audio, and trailing non-audio data
-long CLpacEncoder::EncodeAll()
+short CLpacEncoder::EncodeAll()
 {
 	long f;
 	ENCINFO encinfo;
 
 	if ((frames = WriteHeader(&encinfo)) < 0)
-		return(frames);
+		return static_cast<short>( frames );
 
 	for (f = 0; f < frames; f++)
 	{
@@ -994,12 +1064,12 @@ short CLpacEncoder::SetMSBfirst(short MSBfirst_x)
 		return(MSBfirst = 1);
 };
 
-unsigned long CLpacEncoder::SetHeaderSize(unsigned long HeaderSize_x)
+ALS_INT64 CLpacEncoder::SetHeaderSize(ALS_INT64 HeaderSize_x)
 {
 	return(HeaderSize = HeaderSize_x);
 };
 
-unsigned long CLpacEncoder::SetTrailerSize(unsigned long TrailerSize_x)
+ALS_INT64 CLpacEncoder::SetTrailerSize(ALS_INT64 TrailerSize_x)
 {
 	return(TrailerSize = TrailerSize_x);
 };
@@ -1118,10 +1188,11 @@ short CLpacEncoder::EncodeFrame()
 	short b, Bsub, a, B, CBS;
 	long i, NN, Nrem, Nb;
 
-	long **xsave, **xssave, **xtmp, *bytes_MCC;
-	xsave = new long*[Chan];
-	xssave = new long*[(long)Chan/2];
-	xtmp = new long*[Chan];
+	int **xsave, **xssave, **xtmp;
+	long *bytes_MCC;
+	xsave = new int*[Chan];
+	xssave = new int*[(long)Chan/2];
+	xtmp = new int*[Chan];
 	bytes_MCC = new long[Chan];
 
 	long bpbi_total;						// Bytes per frame (total)
@@ -1196,10 +1267,10 @@ short CLpacEncoder::EncodeFrame()
 				{
 					// save size of RAU before its first frame
 					fseek(fpOutput, -(long)ra_bytes - 4, SEEK_CUR);	// back to the last RAU
-					WriteULongMSBfirst(ra_bytes, fpOutput);			// write size
+					WriteUIntMSBfirst(ra_bytes, fpOutput);			// write size
 					fseek(fpOutput, ra_bytes, SEEK_CUR);			// forward to current frame
 				}
-				WriteULongMSBfirst(ra_bytes, fpOutput);			// write 4 dummy bytes for current RAU
+				WriteUIntMSBfirst(ra_bytes, fpOutput);			// write 4 dummy bytes for current RAU
 			}
 			else if (RAflag == 2)		// save random access info in header
 			{
@@ -1414,8 +1485,8 @@ short CLpacEncoder::EncodeFrame()
 
 			// Chose best partition and assign frame buffer ///////////////////////////////////////////
 			long tmp, tmp_dest, tmp_src, tmp_org, bits[16];
-			ULONG BSflags, BSflagsi[2];
-			short bshift, B1, Nb1;
+			UINT BSflags, BSflagsi[2];
+			unsigned short bshift, B1, Nb1;
 
 			if (Bsub >= 3)
 				BSflags = 0x7FFFFFFF;
@@ -1674,7 +1745,7 @@ short CLpacEncoder::EncodeFrame()
 					}
 					if(PITCH) 
 					{
-						memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(long) * 2048 );
+						memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(int) * 2048 );
 						LTPanalysis(&MccBuf, c0, N, 10, x[c0]);
 					}					
 					bytes_1 = EncodeBlockCoding( &MccBuf, c0, MccBuf.m_dmat[c0], tmpbuf1, 0);
@@ -1690,7 +1761,7 @@ short CLpacEncoder::EncodeFrame()
 					}
 					if(PITCH) 
 					{
-						memset( MccBuf.m_Ltp.m_pBuffer[c1].m_ltpmat, 0, sizeof(long) * 2048 );
+						memset( MccBuf.m_Ltp.m_pBuffer[c1].m_ltpmat, 0, sizeof(int) * 2048 );
 						LTPanalysis(&MccBuf, c1, N, 10, x[c1]);
 					}
 					bytes_2 = EncodeBlockCoding( &MccBuf, c1, MccBuf.m_dmat[c1], tmpbuf2, 0);
@@ -1708,7 +1779,7 @@ short CLpacEncoder::EncodeFrame()
 						for(i=0;i<N;i++) MccBuf.m_dmat[c0][i]=x[c0][i];
 						if(PITCH) 
 						{
-							memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(long) * 2048 );
+							memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(int) * 2048 );
 							LTPanalysis(&MccBuf, c0, N, 10, x[c0]);
 						}					
 						bytes_1 = EncodeBlockCoding( &MccBuf, c0, MccBuf.m_dmat[c0], tmpbuf1, 0);
@@ -1717,7 +1788,7 @@ short CLpacEncoder::EncodeFrame()
 						for(i=0;i<N;i++) MccBuf.m_dmat[c1][i]=x[c1][i];
 						if(PITCH) 
 						{
-							memset( MccBuf.m_Ltp.m_pBuffer[c1].m_ltpmat, 0, sizeof(long) * 2048 );
+							memset( MccBuf.m_Ltp.m_pBuffer[c1].m_ltpmat, 0, sizeof(int) * 2048 );
 							LTPanalysis(&MccBuf, c1, N, 10, x[c1]);
 						}
 						bytes_2 = EncodeBlockCoding( &MccBuf, c1, MccBuf.m_dmat[c1], tmpbuf2, 0);
@@ -1750,14 +1821,14 @@ short CLpacEncoder::EncodeFrame()
 					}
 					if(PITCH) 
 					{
-						memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(long) * 2048 );
+						memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(int) * 2048 );
 						LTPanalysis(&MccBuf, c0, N, 10, x[c0]);
 					}
 					bytes_1 = EncodeBlockCoding( &MccBuf, c0, MccBuf.m_dmat[c0], tmpbuf1, 0);
 					RLSLMS_ext=0;
 					if(PITCH) 
 					{
-						memset( MccBuf.m_Ltp.m_pBuffer[c1].m_ltpmat, 0, sizeof(long) * 2048 );
+						memset( MccBuf.m_Ltp.m_pBuffer[c1].m_ltpmat, 0, sizeof(int) * 2048 );
 						LTPanalysis(&MccBuf, c1, N, 10, x[c1]);
 					}
 					bytes_2 = EncodeBlockCoding( &MccBuf, c1, MccBuf.m_dmat[c1], tmpbuf2, 0);
@@ -1778,14 +1849,14 @@ short CLpacEncoder::EncodeFrame()
 						for(i=0;i<N;i++) MccBuf.m_dmat[c0][i]=x[c0][i];
 						if(PITCH) 
 						{
-							memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(long) * 2048 );
+							memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(int) * 2048 );
 							LTPanalysis(&MccBuf, c0, N, 10, x[c0]);
 						}
 						bytes_1 = EncodeBlockCoding( &MccBuf, c0, MccBuf.m_dmat[c0], tmpbuf1, 0);
 						for(i=0;i<N;i++) MccBuf.m_dmat[c1][i]=x[c1][i];
 						if(PITCH) 
 						{
-							memset( MccBuf.m_Ltp.m_pBuffer[c1].m_ltpmat, 0, sizeof(long) * 2048 );
+							memset( MccBuf.m_Ltp.m_pBuffer[c1].m_ltpmat, 0, sizeof(int) * 2048 );
 							LTPanalysis(&MccBuf, c1, N, 10, x[c1]);
 						}
 						bytes_2 = EncodeBlockCoding( &MccBuf, c1, MccBuf.m_dmat[c1], tmpbuf2, 0);
@@ -1793,8 +1864,8 @@ short CLpacEncoder::EncodeFrame()
 
 					if (bytes_1<0 || bytes_2<0) 
 					{
-						printf("ALS file size error com %d %d \t",bytes_1,bytes_2);
-						exit(1);
+						printf("ALS file size error com %ld %ld \t",bytes_1,bytes_2);
+						exit(3);
 					}
 				}
 			}
@@ -1819,7 +1890,7 @@ short CLpacEncoder::EncodeFrame()
 			}
 			if(PITCH) 
 			{
-				memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(long) * 2048 );
+				memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(int) * 2048 );
 				LTPanalysis(&MccBuf, c0, N, 10, x[c0]);
 			}
 			bytes_1 = EncodeBlockCoding( &MccBuf, c0, MccBuf.m_dmat[c0], tmpbuf1, 0);
@@ -1839,7 +1910,7 @@ short CLpacEncoder::EncodeFrame()
 				for(i=0;i<N;i++) MccBuf.m_dmat[c0][i]=x[c0][i];
 				if(PITCH) 
 				{
-					memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(long) * 2048 );
+					memset( MccBuf.m_Ltp.m_pBuffer[c0].m_ltpmat, 0, sizeof(int) * 2048 );
 					LTPanalysis(&MccBuf, c0, N, 10, x[c0]);
 				}
 				bytes_1 = EncodeBlockCoding( &MccBuf, c0, MccBuf.m_dmat[c0], tmpbuf1, 0);
@@ -1912,19 +1983,19 @@ short CLpacEncoder::EncodeFrame()
 				for(c = 0; c < Chan; c++)
 				{
 					EncodeBlockAnalysis( &MccBuf, c, x[c] );
-					memcpy( MccBuf.m_stdmat[c], MccBuf.m_dmat[c], N * sizeof(long) );
-					memcpy( MccBuf.m_orgdmat[c], MccBuf.m_dmat[c], N * sizeof(long) );
+					memcpy( MccBuf.m_stdmat[c], MccBuf.m_dmat[c], N * sizeof(int) );
+					memcpy( MccBuf.m_orgdmat[c], MccBuf.m_dmat[c], N * sizeof(int) );
 				}
 
 				short	tt,TauTap=2,*ttOPT,mtp;
 				long *ttMinBytes;
 				ttOPT=new short[Chan];
 				ttMinBytes=new long[Chan];
-				long **stackmtgmm,*stdtau;
-				stackmtgmm=new long*[Chan];
+				int **stackmtgmm,*stdtau;
+				stackmtgmm=new int*[Chan];
 				for(c = 0; c < Chan; c++)
-					stackmtgmm[c]=new long[Mtap];
-				stdtau=new long[Chan];
+					stackmtgmm[c]=new int[Mtap];
+				stdtau=new int[Chan];
 
 				for(c = 0; c < Chan; c++)
 				{
@@ -1945,10 +2016,10 @@ short CLpacEncoder::EncodeFrame()
 				{
 					for(c = 0; c < Chan; c++)
 					{
-						memcpy( MccBuf.m_stdmat[c], MccBuf.m_dmat[c], N * sizeof(long) );
+						memcpy( MccBuf.m_stdmat[c], MccBuf.m_dmat[c], N * sizeof(int) );
 						for(mtp = 0; mtp < Mtap; mtp++) stackmtgmm[c][mtp]=MccBuf.m_cubgmm[c][oaa][mtp];
 						stdtau[c] = MccBuf.m_tdtau[c][oaa];
-						memcpy( MccBuf.m_dmat[c], MccBuf.m_orgdmat[c], N * sizeof(long) );
+						memcpy( MccBuf.m_dmat[c], MccBuf.m_orgdmat[c], N * sizeof(int) );
 					}
 
 					SubtractResidualTD( &MccBuf, Chan, N ,tt);			// Slave channel - Master channel
@@ -1969,7 +2040,7 @@ short CLpacEncoder::EncodeFrame()
 						}
 						else
 						{
-							memcpy( MccBuf.m_dmat[c], MccBuf.m_stdmat[c], N * sizeof(long) );
+							memcpy( MccBuf.m_dmat[c], MccBuf.m_stdmat[c], N * sizeof(int) );
 							for(mtp = 0; mtp < Mtap; mtp++) MccBuf.m_cubgmm[c][oaa][mtp]=stackmtgmm[c][mtp];
 							MccBuf.m_tdtau[c][oaa] = stdtau[c];
 						}
@@ -2019,8 +2090,8 @@ short CLpacEncoder::EncodeFrame()
 
 		// Chose best partition and assign frame buffer ///////////////////////////////////////////
 		long tmp, tmp_dest, tmp_src, tmp_org, bits[16];
-		ULONG BSflags;
-		short bshift, B1, Nb1;
+		UINT BSflags;
+		unsigned short bshift, B1, Nb1;
 
 		if (Bsub >= 3)
 			BSflags = 0x7FFFFFFF;
@@ -2125,12 +2196,12 @@ short CLpacEncoder::EncodeFrame()
 			{
 				memcpy(buffer[0], buffer_m, bpf_total_m);
 				bpf_total= bpf_total_m;
-				uu=0;
+				uu=0x80;
 				fwrite(&uu, 1, 1 , fpOutput);
 			}	
 			else
 			{
-				uu=1;
+				uu=0;
 				fwrite(&uu, 1, 1, fpOutput);
 			}
 		}
@@ -2149,18 +2220,18 @@ short CLpacEncoder::EncodeFrame()
 
 	// Copy last P samples of each block in front of it
 	for (c = 0; c < Chan; c++)
-		memcpy(x[c] - P, x[c] + (N - P), P * 4);
+		memcpy(x[c] - P, x[c] + (N - P), P * sizeof(int));
 	if (Joint)
 	{
 		for (cpe = 0; cpe < CPE; cpe++)
-			memcpy(xs[cpe] - P, xs[cpe] + (N - P), P * 4);
+			memcpy(xs[cpe] - P, xs[cpe] + (N - P), P * sizeof(int));
 	}
 
 	// Write frame buffer
 	if ( SampleType == SAMPLE_TYPE_FLOAT ) {
 		// Floating point PCM
-		if ( fwrite( buffer[0], 1, bpf_total - sizeof(bytes_diff) - bytes_diff, fpOutput ) != bpf_total - sizeof(bytes_diff) - bytes_diff ) return 1;
-		WriteULongMSBfirst(bytes_diff, fpOutput);
+		if ( fwrite( buffer[0], 1, bpf_total - 4 - bytes_diff, fpOutput ) != bpf_total - 4 - bytes_diff ) return 1;
+		WriteUIntMSBfirst(bytes_diff, fpOutput);
 		if ( fwrite( Float.GetDiffBuffer(), 1, bytes_diff, fpOutput ) != bytes_diff ) return 1;
 	} else {
 		// Integer PCM
@@ -2177,7 +2248,7 @@ short CLpacEncoder::EncodeFrame()
 		{
 			// save size last RAU before the first frame of last RAU
 			fseek(fpOutput, -(long)ra_bytes - 4, SEEK_CUR);		// back to last RAU
-			WriteULongMSBfirst(ra_bytes, fpOutput);				// write size
+			WriteUIntMSBfirst(ra_bytes, fpOutput);				// write size
 			fseek(fpOutput, ra_bytes, SEEK_CUR);				// forward to current frame
 		}
 		else if (RAflag == 2)
@@ -2214,7 +2285,7 @@ short CLpacEncoder::EncodeFrame()
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Encode a single block
-long CLpacEncoder::EncodeBlock(long *x, unsigned char *bytebuf)
+long CLpacEncoder::EncodeBlock(int *x, unsigned char *bytebuf)
 {
 	EncodeBlockAnalysis( &MccBuf, 0, x );
 	return EncodeBlockCoding( &MccBuf, 0, MccBuf.m_dmat[0], bytebuf, 0);
@@ -2222,10 +2293,10 @@ long CLpacEncoder::EncodeBlock(long *x, unsigned char *bytebuf)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Encode a single block analysis
-void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, long *x)
+void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, int *x)
 {
-	long *d=pBuffer->m_dmat[Channel];
-	long *mccasi=pBuffer->m_asimat[Channel];
+	int *d=pBuffer->m_dmat[Channel];
+	int *mccasi=pBuffer->m_asimat[Channel];
 	char *xpr=&pBuffer->m_xpara[Channel];
 	short *sft=&pBuffer->m_shift[Channel];
 	short *oP=&pBuffer->m_optP[Channel];
@@ -2271,7 +2342,7 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, lo
 	else
 	{
 		*xpr=0;
-		long asi[1023], parq[1023], *xtmp;
+		int asi[1023], parq[1023], *xtmp;
 		short shift = 0;
 
 		optP = P;
@@ -2279,12 +2350,10 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, lo
 
 		if (Adapt)
 		{
-			// Limit maximum predictor order to 1/8 of the block length
-			
-			if (P >= (N >> 3))
-				Pmax = (N >> 3) - 1;
-			if (Pmax < 1)
-				Pmax = 1;	// -> h >= 0
+			// Limit maximum predictor order
+			const short h = (N < 8) ? 1 : min(ilog2_ceil(Pmax+1), max(ilog2_ceil(N >> 3), 1));
+			if (Pmax >= (1 << h))
+				Pmax = (1 << h) - 1;
 		}
 
 		if (LSBcheck)
@@ -2292,7 +2361,7 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, lo
 			// Empty LSBs?
 			if (shift = ShiftOutEmptyLSBs(x, N))
 			{
-				xtmp = new long[Pmax];
+				xtmp = new int[Pmax];
 				// "Shift" last Pmax samples of previous block
 				for (i = -Pmax; i < 0; i++)
 				{
@@ -2348,7 +2417,7 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, lo
 				if( optP > 0)
 				{
 					par[0] = -0.9;
-					asi[0] = (long)floor((-1+sqrt(2.0)*sqrt(par[0]+1.0))*64);
+					asi[0] = (int)floor((-1+sqrt(2.0)*sqrt(par[0]+1.0))*64);
 					parq[0] = pc12_tbl[asi[0]+64];
 				}
 				if ( optP > 1)
@@ -2383,7 +2452,7 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, lo
 				if(optP>0)
 				{
 					par[0] = -0.9;
-					asi[0] = (long)floor((-1+sqrt(2.0)*sqrt(par[0]+1.0))*64);
+					asi[0] = (int)floor((-1+sqrt(2.0)*sqrt(par[0]+1.0))*64);
 					parq[0] = pc12_tbl[asi[0]+64];
 				}
 				/* second coefficient: */ 
@@ -2415,7 +2484,7 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, lo
 
 		if(PITCH) 
 		{
-			memset( pBuffer->m_Ltp.m_pBuffer[Channel].m_ltpmat, 0, sizeof(long) * 2048 );
+			memset( pBuffer->m_Ltp.m_pBuffer[Channel].m_ltpmat, 0, sizeof(int) * 2048 );
 			LTPanalysis(pBuffer, Channel, N, optP, x);
 		}
 
@@ -2434,26 +2503,26 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, lo
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Encode a single block coding
-long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, long *d, unsigned char *bytebuf, long gmod)
+long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, int *d, unsigned char *bytebuf, long gmod)
 {
-	long *puch=pBuffer->m_puchan[Channel];
-	long *asi=pBuffer->m_asimat[Channel];
+	int *puch=pBuffer->m_puchan[Channel];
+	int *asi=pBuffer->m_asimat[Channel];
 	char xpra=pBuffer->m_xpara[Channel];
 	short shift=pBuffer->m_shift[Channel];
 	short optP=pBuffer->m_optP[Channel];
 	long oaa;
 	//MCC-ex
-	long *tdtauval=pBuffer->m_tdtau[Channel];
+	int *tdtauval=pBuffer->m_tdtau[Channel];
 	short *MccMode=pBuffer->m_MccMode[Channel];
-	long **mtgmm=pBuffer->m_cubgmm[Channel];
+	int **mtgmm=pBuffer->m_cubgmm[Channel];
 
 	static double d2mean;
 	static long danz;
 	BYTE h, hl[4];
 	short sub, s[8], sx[8], sfix, S[8];
 	long Ns;
-	long i, j, c;
-
+	long i, j;
+	int c;
 	/* rice code parameters for each coeff: */
 	struct pv {int m,s;} *parcor_vars;
 
@@ -2497,19 +2566,19 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 		h = (BYTE)64;							// Block header h = 0100 0000
 		out.WriteByteAlign(h);
 
-		if ( IntRes == 8 )
+		if ( IntRes <= 8 )
 		{
 			hl[0] = static_cast<BYTE>( c + 128 );
 			out.WriteByteAlign( hl[0] );
 		}
-		else if ( IntRes == 16 )
+		else if ( IntRes <= 16 )
 		{
 			hl[0] = (short(c) & 0xFF00) >> 8;			// HiByte
 			hl[1] = (short(c) & 0x00FF);				// LoByte
 			out.WriteByteAlign(hl[0]);
 			out.WriteByteAlign(hl[1]);
 		}
-		else if (IntRes == 24)
+		else if (IntRes <= 24)
 		{
 			hl[0] = (c >> 16) & 0xFF;
 			hl[1] = (c >> 8) & 0xFF;
@@ -2518,7 +2587,7 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 			out.WriteByteAlign(hl[1]);
 			out.WriteByteAlign(hl[2]);
 		}
-		else	// IntRes == 32
+		else	// IntRes > 24
 		{
 			hl[0] = (c >> 24) & 0xFF;
 			hl[1] = (c >> 16) & 0xFF;
@@ -2651,14 +2720,14 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 
 		// Block header
 		h = (BYTE)2;				// 1J (J is set in EncodeFrame)
-		out.WriteBits((ULONG)h, 2);
+		out.WriteBits((UINT)h, 2);
 
 		if (!BGMC)
 		{
 			if (sub == 4)
-				out.WriteBits((ULONG)1, 1);
+				out.WriteBits((UINT)1, 1);
 			else
-				out.WriteBits((ULONG)0, 1);
+				out.WriteBits((UINT)0, 1);
 		}
 		else
 		{
@@ -2666,14 +2735,14 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 				h = 3;			// 8 -> 11
 			else
 				h = sub >> 1;	// 4 -> 10, 2 -> 01, 1 -> 00
-			out.WriteBits((ULONG)h, 2);
+			out.WriteBits((UINT)h, 2);
 		}
 
 		// Code parameters for EC blocks
 		if (!BGMC)
 		{
 			short sbits = Res <= 16 ? 4 : 5;
-			out.WriteBits((ULONG)s[0], sbits);	// direct coding of s[0]
+			out.WriteBits((UINT)s[0], sbits);	// direct coding of s[0]
 			for (j = 1; j < sub; j++)
 			{
 				c = s[j] - s[j-1];				// delta coding of s[j]
@@ -2683,7 +2752,7 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 		else
 		{
 			short sbits = Res <= 16 ? 8 : 9;
-			out.WriteBits((ULONG)S[0], sbits);	// direct coding of S[0]
+			out.WriteBits((UINT)S[0], sbits);	// direct coding of S[0]
 			for (j = 1; j < sub; j++)
 			{
 				c = S[j] - S[j-1];				// delta coding of S[j]
@@ -2695,7 +2764,7 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 		if (shift && !RLSLMS)
 		{
 			out.WriteBits(1, 1);
-			out.WriteBits(ULONG(shift - 1), 4);
+			out.WriteBits(UINT(shift - 1), 4);
 		}
 		else
 			out.WriteBits(0, 1); // 0 if RLSLMS is used
@@ -2704,15 +2773,9 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 			// Predictor order (optP <= P, write only necessary bits)
 			if (Adapt)
 			{
-				// Limit maximum predictor order to 1/8 of the block length
-				short Pmax = P;
-				if (P >= (N >> 3))
-					Pmax = (N >> 3) - 1;
-				if (Pmax < 1)
-					Pmax = 1;	// -> h >= 0
-
-				for (h = 9; Pmax < (1 << h); h--);
-				out.WriteBits(ULONG(optP), h+1);	// max. 10 bits for 512 <= P <= 1023
+				// Limit maximum predictor order
+				h = (N < 8) ? 1 : min(ilog2_ceil(P+1), max(ilog2_ceil(N >> 3), 1));
+				out.WriteBits(UINT(optP), h);	// max. 10 bits for 512 <= P <= 1023
 			}
 
 			/* encode coefs: */
@@ -2742,12 +2805,13 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 		else
 		{
 			// Progressive prediction: Separate entropy coding of the first 3 samples
+			short RiceLimit = ( Res <= 16 ) ? 15 : 31;
 			if (optP > 0)
 				out.WriteRice(d, Res-4, 1);
 			if (optP > 1)
-				out.WriteRice(d+1, min(s[0]+3, 31), 1);
+				out.WriteRice(d+1, min(s[0]+3, RiceLimit), 1);
 			if (optP > 2)
-				out.WriteRice(d+2, min(s[0]+1, 31), 1);
+				out.WriteRice(d+2, min(s[0]+1, RiceLimit), 1);
 
 			if (!BGMC)
 			{
@@ -2765,12 +2829,12 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 
 	if (RLSLMS)
 	{
-		out.WriteBits((ULONG) mono_frame,1);
+		out.WriteBits((UINT) mono_frame,1);
 		//printf("%d %d ",RLSLMS_ext,optP);
 		if (RLSLMS_ext!=0)
 		{
-			out.WriteBits((ULONG) 1,1);
-			out.WriteBits((ULONG) RLSLMS_ext,3);
+			out.WriteBits((UINT) 1,1);
+			out.WriteBits((UINT) RLSLMS_ext,3);
 			if (RLSLMS_ext&0x01) // change lambda only
 			{
 				out.WriteBits((c_mode_table.filter_len[1]>>1),4);
@@ -2820,7 +2884,7 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 			}
 			else 
 			{
-				out.WriteBits((ULONG)(MccMode[oaa])-1,1); // MccEx
+				out.WriteBits((UINT)(MccMode[oaa])-1,1); // MccEx
 
 				for(j = 0; j < Mtap; j++)
 					mtgmm[oaa][j] -= 16;
@@ -2845,7 +2909,7 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 
 					if(tdtauval[oaa]>0)out.WriteBits(0,1);
 					else out.WriteBits(1,1);
-					out.WriteBits((ULONG) (abs(tdtauval[oaa])-3),NeedTdBit);
+					out.WriteBits((UINT) (abs(tdtauval[oaa])-3),NeedTdBit);
 				}
 			}
 		}
@@ -2860,17 +2924,17 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, lon
 //            LTP analysis            //
 //                                    //
 ////////////////////////////////////////
-void	CLpacEncoder::LTPanalysis( MCC_ENC_BUFFER* pBuffer, long Channel, long N, short optP, long* x )
+void	CLpacEncoder::LTPanalysis( MCC_ENC_BUFFER* pBuffer, long Channel, long N, short optP, int* x )
 {
 	CLtpBuffer*	pLtpBuf = pBuffer->m_Ltp.m_pBuffer + Channel;
-	long*	dd = pLtpBuf->m_ltpmat + 2048;
-	long*	dd0 = new long [ 4 * N ];
+	int*	dd = pLtpBuf->m_ltpmat + 2048;
+	int*	dd0 = new int [ 4 * N ];
 	long	tmpbytes0 = 0;
 	long	minbytes;
 
 	pBuffer->m_optP[Channel] = optP;
 	
-	memcpy( pLtpBuf->m_ltpmat + 2048, pBuffer->m_dmat[Channel], N * sizeof(long) );
+	memcpy( pLtpBuf->m_ltpmat + 2048, pBuffer->m_dmat[Channel], N * sizeof(int) );
 
 	pLtpBuf->m_ltp = 0;
 	tmpbytes0 = EncodeBlockCoding( pBuffer, Channel, dd, pBuffer->m_tmpbuf1, 0 );
@@ -2880,8 +2944,8 @@ void	CLpacEncoder::LTPanalysis( MCC_ENC_BUFFER* pBuffer, long Channel, long N, s
 	// Pitch Coding
 	CLtpBuffer	inpitch;
 	pBuffer->m_Ltp.PitchSubtract( &inpitch, dd, dd0, N, optP, Freq, PITCH );
-	memcpy( pLtpBuf->m_ltpmat + 2048, pBuffer->m_dmat[Channel], N * sizeof(long) );
-	memcpy( pLtpBuf->m_ltpmat, pLtpBuf->m_ltpmat + N, 2048 * sizeof(long) );
+	memcpy( pLtpBuf->m_ltpmat + 2048, pBuffer->m_dmat[Channel], N * sizeof(int) );
+	memcpy( pLtpBuf->m_ltpmat, pLtpBuf->m_ltpmat + N, 2048 * sizeof(int) );
 	pLtpBuf->m_ltp = 0;
 	tmpbytes0 = EncodeBlockCoding( pBuffer, Channel, dd0, pBuffer->m_tmpbuf1, 0 );
 
@@ -2889,7 +2953,7 @@ void	CLpacEncoder::LTPanalysis( MCC_ENC_BUFFER* pBuffer, long Channel, long N, s
 		pLtpBuf->m_ltp = 1;
 		minbytes = tmpbytes0;
 		pLtpBuf->m_plag = inpitch.m_plag;
-		memcpy( pBuffer->m_dmat[Channel], dd0, N * sizeof(long) );
+		memcpy( pBuffer->m_dmat[Channel], dd0, N * sizeof(int) );
 		memcpy( pLtpBuf->m_pcoef_multi, inpitch.m_pcoef_multi, 5 * sizeof(short) );
 	}
 	delete[] dd0;

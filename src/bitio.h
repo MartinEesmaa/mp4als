@@ -41,6 +41,7 @@ contents : Header file for bitio.cpp
  *
  * 03/17/2004, Koichi Sugiura <ksugiura@mitaka.ntt-at.co.jp>
  *   - added BITIO_INCLUDED symbol to avoid multiple inclusion
+ *
  *************************************************************************/
 
 #ifndef	BITIO_INCLUDED
@@ -57,12 +58,12 @@ public:
 	void InitBitWrite(unsigned char *buffer);
 	long EndBitWrite();
 	long WriteByteAlign(unsigned char wert);
-	long WriteBits(unsigned long value, short bits);
-	long WriteRice(long *wert, char s, long N);
+	long WriteBits(unsigned int value, short bits);
+	long WriteRice(int *wert, char s, long N);
 
 	void InitBitRead(unsigned char *buffer);
 	long EndBitRead();
-	long ReadBits(unsigned long *value, short bits);
+	long ReadBits(unsigned int *value, short bits);
 	long ReadRice(long *wert, char s, long N);
 };
 
@@ -84,13 +85,13 @@ struct CBitIO
     void InitBitWrite(unsigned char *buffer)		{bitio_init (buffer, 1, &bio);}
     long EndBitWrite()								{return bitio_term (&bio);}
     long WriteByteAlign(unsigned char wert)			{put_bits (wert, 8, &bio); return 8;}
-    long WriteRice(long *wert, char s, long N)		{return rice_encode_block (wert, s, N, &bio);}
-	long WriteBits(unsigned long value, short bits)	{put_bits (value, bits, &bio); return bits;}
+    long WriteRice(int *wert, char s, long N)		{return rice_encode_block (wert, s, N, &bio);}
+	long WriteBits(unsigned int value, short bits)	{put_bits (value, bits, &bio); return bits;}
 
     void InitBitRead(unsigned char *buffer)			{bitio_init (buffer, 0, &bio);}
     long EndBitRead()								{return bitio_term (&bio);}
-    long ReadRice(long *wert, char s, long N)		{return rice_decode_block (wert, s, N, &bio);}
-	long ReadBits(unsigned long *value, short bits)	{*value = get_bits(bits, &bio); return bits;}
+    long ReadRice(int *wert, char s, long N)		{return rice_decode_block (wert, s, N, &bio);}
+	long ReadBits(unsigned int *value, short bits)	{*value = get_bits(bits, &bio); return bits;}
 };
 
 #endif

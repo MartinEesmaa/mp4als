@@ -110,6 +110,12 @@ contents : Floating-point PCM support
  * 11/30/2005, Noboru Harada <n-harada@theory.brl.ntt.co.jp>
  *   - fixed decoding FAILED when compild with .net2003.
  *
+ * 05/23/2007, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - replaced FILE* with HALSSTREAM.
+ *
+ * 10/22/2008, Koichi Sugiura <koichi.sugiura@ntt-at.cojp>
+ *   - modified process exit code.
+ *
  ************************************************************************/
 
 #include	<cstdio>
@@ -120,6 +126,7 @@ contents : Floating-point PCM support
 #include	<vector>
 #include	"floating.h"
 #include	"mlz.h"
+#include	"stream.h"
 
 #ifndef	__min
 #define	__min( a, b )	( ( a < b ) ? a : b )
@@ -143,7 +150,7 @@ float	CIEEE32::PowOfTwo( int shiftbit )
 	int		i, remain, maxshift;
 	float	outfloat;
 
-	maxshift = sizeof(long) * 8 - 1;
+	maxshift = sizeof(int) * 8 - 1;
 	remain = ( abs( shiftbit ) > maxshift ) ? abs( shiftbit ) - maxshift : 0;
 	if ( remain ) {
 		outfloat = (float)( 0x1u << maxshift );
@@ -170,19 +177,19 @@ float	CIEEE32::PowOfTwo( int shiftbit )
 //   last 23 bits = mantissa
 bool	CIEEE32::Set( const unsigned char* cpInput, bool MSBFirst )
 {
-	unsigned long	lnum;
+	unsigned int	lnum;
 	unsigned char	cTemp;
 
 	if ( !MSBFirst ) {
 		// Little endian
 		// cpInput[3] cpInput[2] cpInput[1] cpInput[0]
-		lnum = 0UL;
+		lnum = 0;
 		
 		if ( (cpInput[3] & 0x80) == 0 ) {
 			m_sign = 0;
 		} else {
 			m_sign = 1;
-			lnum |= 0x80000000UL;
+			lnum |= 0x80000000U;
 		}
 		cTemp = ( cpInput[2] & 0x80 ) ? 0x01 : 0x00;		// highest bit of cpInput[2]
 		m_exp = (int)( ( (unsigned char)(cpInput[3] & 0x7fu) << 1 ) | cTemp ) - IEEE754_EXP_BIASED;
@@ -196,10 +203,10 @@ bool	CIEEE32::Set( const unsigned char* cpInput, bool MSBFirst )
 			//return false;
 		}
 
-		lnum |= ( (unsigned long)( m_exp + IEEE754_EXP_BIASED ) ) << 23;
-		m_mantissa = ( (unsigned long)cTemp << 16 ) | ( (unsigned long)cpInput[1] << 8 ) | (unsigned long)cpInput[0];
-		lnum |= m_mantissa & 0x007fffffUL;
-		*reinterpret_cast<unsigned long*>( &m_floatnum ) = lnum;
+		lnum |= ( (unsigned int)( m_exp + IEEE754_EXP_BIASED ) ) << 23;
+		m_mantissa = ( (unsigned int)cTemp << 16 ) | ( (unsigned int)cpInput[1] << 8 ) | (unsigned int)cpInput[0];
+		lnum |= m_mantissa & 0x007fffffU;
+		*reinterpret_cast<unsigned int*>( &m_floatnum ) = lnum;
 
 	} else {
 		// Big endian
@@ -210,7 +217,7 @@ bool	CIEEE32::Set( const unsigned char* cpInput, bool MSBFirst )
 			m_sign = 0;
 		} else {
 			m_sign = 1;
-			lnum |= 0x80000000UL;
+			lnum |= 0x80000000U;
 		}
 		cTemp = ( cpInput[1] & 0x80 ) ? 0x01 : 0x00;		// highest bit of cpInput[2]
 		m_exp = (int)( ( (unsigned char)(cpInput[0] & 0x7fu) << 1 ) | cTemp ) - IEEE754_EXP_BIASED;
@@ -224,10 +231,10 @@ bool	CIEEE32::Set( const unsigned char* cpInput, bool MSBFirst )
 			//return false;
 		}
 
-		lnum |= ( (unsigned long)( m_exp + IEEE754_EXP_BIASED ) ) << 23;
-		m_mantissa = ( (unsigned long)cTemp << 16 ) | ( (unsigned long)cpInput[2] << 8 ) | (unsigned long)cpInput[3];
-		lnum |= m_mantissa & 0x007fffffUL;
-		*reinterpret_cast<unsigned long*>( &m_floatnum ) = lnum;
+		lnum |= ( (unsigned int)( m_exp + IEEE754_EXP_BIASED ) ) << 23;
+		m_mantissa = ( (unsigned int)cTemp << 16 ) | ( (unsigned int)cpInput[2] << 8 ) | (unsigned int)cpInput[3];
+		lnum |= m_mantissa & 0x007fffffU;
+		*reinterpret_cast<unsigned int*>( &m_floatnum ) = lnum;
 	}
 	return true;
 }
@@ -240,34 +247,34 @@ bool	CIEEE32::Set( const unsigned char* cpInput, bool MSBFirst )
 // Value = Float value to set
 void	CIEEE32::Set( float Value )
 {
-	*reinterpret_cast<unsigned long*>( &m_floatnum ) = *reinterpret_cast<unsigned long*>( &Value );
-	if ( ( ( reinterpret_cast<unsigned long&>( Value ) ) & 0x80000000UL ) == 0 )
+	*reinterpret_cast<unsigned int*>( &m_floatnum ) = *reinterpret_cast<unsigned int*>( &Value );
+	if ( ( ( reinterpret_cast<unsigned int&>( Value ) ) & 0x80000000U ) == 0 )
 		m_sign = 0;
 	else
 		m_sign = 1;
-	m_exp = (int)( ( ( reinterpret_cast<unsigned long&>( Value ) >> 23 ) & 0xff ) - IEEE754_EXP_BIASED );
+	m_exp = (int)( ( ( reinterpret_cast<unsigned int&>( Value ) >> 23 ) & 0xff ) - IEEE754_EXP_BIASED );
 	if ( m_exp == -IEEE754_EXP_BIASED ) {
 		// denormalized number
-		m_mantissa = reinterpret_cast<unsigned long&>( Value ) & 0x007fffffUL;
+		m_mantissa = reinterpret_cast<unsigned int&>( Value ) & 0x007fffffUL;
 	} else if ( m_exp <= IEEE754_EXP_BIASED ) {
 		// set highest bit to 1
-		m_mantissa = ( reinterpret_cast<unsigned long&>( Value ) & 0x007fffffUL ) | 0x00800000UL;
+		m_mantissa = ( reinterpret_cast<unsigned int&>( Value ) & 0x007fffffUL ) | 0x00800000UL;
 	} else {
 		// NaN
-		m_mantissa = reinterpret_cast<unsigned long&>( Value ) & 0x007fffffUL;
+		m_mantissa = reinterpret_cast<unsigned int&>( Value ) & 0x007fffffUL;
 	}
 }
 
 
 ////////////////////////////////////////
 //                                    //
-// Set ulong value to CIEEE32 object  //
+// Set uint value to CIEEE32 object   //
 //                                    //
 ////////////////////////////////////////
-// Value = Float value to set as long
-void	CIEEE32::Set( unsigned long Value )
+// Value = Float value to set as int
+void	CIEEE32::Set( unsigned int Value )
 {
-	*reinterpret_cast<unsigned long*>( &m_floatnum ) = Value;
+	*reinterpret_cast<unsigned int*>( &m_floatnum ) = Value;
 	if ( ( Value & 0x80000000UL ) == 0 )
 		m_sign = 0;
 	else
@@ -293,9 +300,9 @@ void	CIEEE32::Set( unsigned long Value )
 // sign = sign value
 // exp = exponent
 // mantissa = mantissa
-void	CIEEE32::Set( unsigned char sign, int exp, unsigned long mantissa )
+void	CIEEE32::Set( unsigned char sign, int exp, unsigned int mantissa )
 {
-	unsigned long	lnum = 0UL;
+	unsigned int	lnum = 0UL;
 	if ( sign == 0 ) {
 		m_sign = 0;
 	} else {
@@ -315,10 +322,10 @@ void	CIEEE32::Set( unsigned char sign, int exp, unsigned long mantissa )
 		m_exp = exp;
 		m_mantissa = ( mantissa & 0x007fffffUL ) | 0x00800000UL;
 	}
-	lnum |= ( (unsigned long)( exp + IEEE754_EXP_BIASED ) ) << 23;
+	lnum |= ( (unsigned int)( exp + IEEE754_EXP_BIASED ) ) << 23;
 	lnum |= m_mantissa & 0x007fffffUL;
 
-	*reinterpret_cast<unsigned long*>( &m_floatnum ) = lnum;
+	*reinterpret_cast<unsigned int*>( &m_floatnum ) = lnum;
 }
 
 ////////////////////////////////////////
@@ -373,7 +380,7 @@ CIEEE32	CIEEE32::Multiple( const CIEEE32& f1, const CIEEE32& f2 )
 	int				BitCount;
 	int				CutoffBitCount;
 	unsigned char	Last2Bits;
-	unsigned long	Mantissa;
+	unsigned int	Mantissa;
 
 	// Multiple mantissa bits
 	Mantissa64 = (UINT64)f1.m_mantissa * (UINT64)f2.m_mantissa;
@@ -384,13 +391,13 @@ CIEEE32	CIEEE32::Multiple( const CIEEE32& f1, const CIEEE32& f2 )
 	// Round off
 	CutoffBitCount = BitCount - 24;
 	if ( CutoffBitCount > 0 ) {
-		Last2Bits = (unsigned char)( ( (unsigned long)Mantissa64 >> ( CutoffBitCount - 1 ) ) & 0x3 );
-		if ( ( Last2Bits == 0x3 ) || ( ( Last2Bits == 0x1 ) && ( (unsigned long)Mantissa64 & ( ( 0x1UL << ( CutoffBitCount - 1 ) ) - 1 ) ) ) ) {
+		Last2Bits = (unsigned char)( ( (unsigned int)Mantissa64 >> ( CutoffBitCount - 1 ) ) & 0x3 );
+		if ( ( Last2Bits == 0x3 ) || ( ( Last2Bits == 0x1 ) && ( (unsigned int)Mantissa64 & ( ( 0x1UL << ( CutoffBitCount - 1 ) ) - 1 ) ) ) ) {
 			// Need to round up
 			Mantissa64 += (UINT64)0x1 << CutoffBitCount;
 		}
 	}
-	Mantissa = (unsigned long)( Mantissa64 >> CutoffBitCount );
+	Mantissa = (unsigned int)( Mantissa64 >> CutoffBitCount );
 
 	// Need one more shift?
 	if ( Mantissa & 0x01000000ul ) {
@@ -422,7 +429,7 @@ CIEEE32	CIEEE32::Divide( const CIEEE32& f1, const CIEEE32& f2 )
 // Return value = true:Same / false:Different
 bool	CIEEE32::IsSame( float f1, float f2 )
 {
-	return reinterpret_cast<unsigned long&>( f1 ) == reinterpret_cast<unsigned long&>( f2 );
+	return reinterpret_cast<unsigned int&>( f1 ) == reinterpret_cast<unsigned int&>( f2 );
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -437,7 +444,7 @@ bool	CIEEE32::IsSame( float f1, float f2 )
 //                                    //
 ////////////////////////////////////////
 const int			CFloat::NUM_ACF_MAX = 4;				// set the search depth (candidates of AcfGCF per frame)
-const unsigned long	CFloat::MANTISSA_MAX = 0x800000UL;
+const unsigned int	CFloat::MANTISSA_MAX = 0x800000UL;
 const int			CFloat::CONVERGENT_LEN = 40;			// 39 is enough for 24bit mantissa
 const int			CFloat::X_CANDIDATES = 256;
 const int			CFloat::TRY_MAX = 5;
@@ -506,8 +513,8 @@ void	CFloat::AllocateBuffer( long Channels, int FrameSize, int IntRes )
 	for( iChannel=0; iChannel<m_Channels; iChannel++ ) m_ppIEEE32numPCM[iChannel] = new CIEEE32 [ m_FrameSize ];
 
 	// Allocate mantissa difference buffer
-	m_ppDiffMantissa = new unsigned long* [ m_Channels ];
-	for( iChannel=0; iChannel<m_Channels; iChannel++ ) m_ppDiffMantissa[iChannel] = new unsigned long [ m_FrameSize ];
+	m_ppDiffMantissa = new unsigned int* [ m_Channels ];
+	for( iChannel=0; iChannel<m_Channels; iChannel++ ) m_ppDiffMantissa[iChannel] = new unsigned int [ m_FrameSize ];
 
 	// Allocate temporary buffer
 	m_ppCBuffD = new unsigned char* [ m_Channels * m_FrameSize ];
@@ -713,7 +720,7 @@ void	CFloat::ChannelSort( const unsigned short* pChPos, bool Direction )
 // return plus value when there are zeros.
 // return minous value when there are ones.
 // absolute of retuen value indicates continueous number of ones or zeros.
-int	CFloat::CountZeros( unsigned long mantissa )
+int	CFloat::CountZeros( unsigned int mantissa )
 {
 	int i, sign;
 	unsigned int bit;
@@ -749,10 +756,10 @@ int	CFloat::SearchShift( float* pInX, float* pInY, float acf, int lastShift, int
 	// pIn == x
 	// pOut <-- y
 	long	i, j, k;
-	long    histgram[279];
+	int    histgram[279];
 	int		ShiftBit;  //256+23
 	CIEEE32			fx, fy1, fnum;
-	unsigned long	mantissa;
+	unsigned int	mantissa;
 	int				e, MaxMag;
 
 	for(j=0; j<279; j++) histgram[j]=0;
@@ -925,20 +932,20 @@ int	CFloat::ilog2( unsigned int x )
 //       Convert float to integer     //
 //                                    //
 ////////////////////////////////////////
-// ppLongBuf = y signals in integer format (output)
+// ppIntBuf = y signals in integer format (output)
 // FrameSize = Number of samples per frame
 // RandomAccess = true:Random accessable frame
 // AcfMode = ACF mode (0-3)
 // AcfGain = ACF gain value (valid when AcfMode==3)
 // MlzMode = MLZ mode (0-1)
-void	CFloat::ConvertFloatToInteger( long** ppLongBuf, int FrameSize, bool RandomAccess, short AcfMode, float AcfGain, short MlzMode )
+void	CFloat::ConvertFloatToInteger( int** ppIntBuf, int FrameSize, bool RandomAccess, short AcfMode, float AcfGain, short MlzMode )
 {
 	long	iSample, iChannel, badCount;
 	int		ShiftBit, mode, shiftMode;
 	float	Scale;
 	float	y, y1, a, x, x1;
 	CIEEE32  fx, fx1;
-	unsigned long mantissa;
+	unsigned int mantissa;
 	long err;
 
 	Analyze( FrameSize, RandomAccess, AcfMode, AcfGain, MlzMode );
@@ -978,22 +985,22 @@ void	CFloat::ConvertFloatToInteger( long** ppLongBuf, int FrameSize, bool Random
 					err = 0;
 
 					if ( ( m_ppAcfBuff[iChannel][iSample] == 0.f ) || ( m_ppAcfBuff[iChannel][iSample] == -0.f ) ) {
-						ppLongBuf[iChannel][iSample] = 0;
+						ppIntBuf[iChannel][iSample] = 0;
 						x1 = y1 = 0.f;
 
 					} else if ( m_ppAcfBuff[iChannel][iSample] > 0 ) {
-						ppLongBuf[iChannel][iSample] = static_cast<long>( floor( m_ppAcfBuff[iChannel][iSample] * Scale ) );
-						y1 = static_cast<float>( ppLongBuf[iChannel][iSample] ) / Scale;
+						ppIntBuf[iChannel][iSample] = static_cast<int>( floor( m_ppAcfBuff[iChannel][iSample] * Scale ) );
+						y1 = static_cast<float>( ppIntBuf[iChannel][iSample] ) / Scale;
 						x1 = CIEEE32::Multiple( y1, a );	// x'[i] = y'[i] * a
 						if ( x1 != x ) {
 							while ( x1 < x ) {	// x'[] < x[]
-								ppLongBuf[iChannel][iSample]++;
-								y1 = static_cast<float>( ppLongBuf[iChannel][iSample] ) / Scale;	// y'[]
+								ppIntBuf[iChannel][iSample]++;
+								y1 = static_cast<float>( ppIntBuf[iChannel][iSample] ) / Scale;	// y'[]
 								x1 = CIEEE32::Multiple( y1, a );	// x'[i] = y'[i] * a
 							}
 							while ( x1 > x ) {
-								ppLongBuf[iChannel][iSample]--;
-								y1 = static_cast<float>( ppLongBuf[iChannel][iSample] ) / Scale;	// y'[]
+								ppIntBuf[iChannel][iSample]--;
+								y1 = static_cast<float>( ppIntBuf[iChannel][iSample] ) / Scale;	// y'[]
 								x1 = CIEEE32::Multiple( y1, a );	// x'[i] = y'[i] * a
 							}
 						}
@@ -1007,7 +1014,7 @@ void	CFloat::ConvertFloatToInteger( long** ppLongBuf, int FrameSize, bool Random
 							err = (mantissa - fx1.m_mantissa);
 						}
 						if ( err >= 0x0800000UL ) {
-							ppLongBuf[iChannel][iSample] = 0;
+							ppIntBuf[iChannel][iSample] = 0;
 							x1 = y1 = 0.f;
 							badCount += 32;
 							err = 32;
@@ -1024,20 +1031,20 @@ void	CFloat::ConvertFloatToInteger( long** ppLongBuf, int FrameSize, bool Random
 							break;
 						}
 					} else {
-						ppLongBuf[iChannel][iSample] = static_cast<long>( ceil( m_ppAcfBuff[iChannel][iSample] * Scale ) );
-						y1 = static_cast<float>( ppLongBuf[iChannel][iSample] ) / Scale;	// y'[]
+						ppIntBuf[iChannel][iSample] = static_cast<int>( ceil( m_ppAcfBuff[iChannel][iSample] * Scale ) );
+						y1 = static_cast<float>( ppIntBuf[iChannel][iSample] ) / Scale;	// y'[]
 						x1 = CIEEE32::Multiple( y1, a );
 						if ( x1 != x ) {
 							while ( x1 > x ) {	// x'[] > x[]
-								ppLongBuf[iChannel][iSample]--;
-								y1 = static_cast<float>( ppLongBuf[iChannel][iSample] ) / Scale;	// y'[]
+								ppIntBuf[iChannel][iSample]--;
+								y1 = static_cast<float>( ppIntBuf[iChannel][iSample] ) / Scale;	// y'[]
 								x1 = CIEEE32::Multiple( y1, a );	// x'[i] = y'[i] * a
 							}
-							// don't need ppLongBuf[iChannel][iSample]++
+							// don't need ppIntBuf[iChannel][iSample]++
 							// changed for 299\48k24bit\haffner.wav
 							while ( x1 < x ) {
-								ppLongBuf[iChannel][iSample]++;
-								y1 = static_cast<float>( ppLongBuf[iChannel][iSample] ) / Scale;	// y'[]
+								ppIntBuf[iChannel][iSample]++;
+								y1 = static_cast<float>( ppIntBuf[iChannel][iSample] ) / Scale;	// y'[]
 								x1 = CIEEE32::Multiple( y1, a );	// x'[i] = y'[i] * a
 							}
 						}
@@ -1051,7 +1058,7 @@ void	CFloat::ConvertFloatToInteger( long** ppLongBuf, int FrameSize, bool Random
 							err = (mantissa - fx1.m_mantissa);
 						}
 						if ( err >= 0x0800000UL ) {
-							ppLongBuf[iChannel][iSample] = 0;
+							ppIntBuf[iChannel][iSample] = 0;
 							x1 = y1 = 0.f;
 							badCount += 32;
 							err = 32;
@@ -1093,18 +1100,18 @@ void	CFloat::ConvertFloatToInteger( long** ppLongBuf, int FrameSize, bool Random
 				fx.Set( m_ppFloatBuf[iChannel][iSample] );
 				if ( (-127 < fx.m_exp) && ( fx.m_exp < 128 ) ) {
 					if ( m_ppFloatBuf[iChannel][iSample] > 0 ) {
-						ppLongBuf[iChannel][iSample] = static_cast<long>( floor( m_ppFloatBuf[iChannel][iSample] * Scale ) );
+						ppIntBuf[iChannel][iSample] = static_cast<int>( floor( m_ppFloatBuf[iChannel][iSample] * Scale ) );
 					} else {
-						ppLongBuf[iChannel][iSample] = static_cast<long>( ceil( m_ppFloatBuf[iChannel][iSample] * Scale ) );
+						ppIntBuf[iChannel][iSample] = static_cast<int>( ceil( m_ppFloatBuf[iChannel][iSample] * Scale ) );
 					}
 				} else {
 					// 0 or denormalized number
 					// NaN or +/-infinite
-					ppLongBuf[iChannel][iSample] = 0;
+					ppIntBuf[iChannel][iSample] = 0;
 				}
-				if ( ppLongBuf[iChannel][iSample] > 8388607L || ppLongBuf[iChannel][iSample] < -8388608L ) {
+				if ( ppIntBuf[iChannel][iSample] > 8388607L || ppIntBuf[iChannel][iSample] < -8388608L ) {
 //					printf("Err!!: Shifted value exceeded 24bit!!, ShiftBit=%d\n", ShiftBit);
-					ppLongBuf[iChannel][iSample] = 0;
+					ppIntBuf[iChannel][iSample] = 0;
 				}
 			}
 		} // acf == 1.f || acf == 0.f
@@ -1130,7 +1137,7 @@ void	CFloat::Analyze( long FrameSize, bool RandomAccess, short AcfMode, float Ac
 	CIEEE32			fnum;
 	float			acfCandidates[NUM_ACF_MAX];
 	int				num_acf, cand;
-	unsigned long	r;
+	unsigned int	r;
 
 	for( j=0; j<m_Channels; j++ ) {
 		cand = 0;
@@ -1295,10 +1302,10 @@ void	CFloat::Analyze( long FrameSize, bool RandomAccess, short AcfMode, float Ac
 //    Find difference of float PCM    //
 //                                    //
 ////////////////////////////////////////
-// ppLongBuf = Long data buffer
+// ppIntBuf = Long data buffer
 // FrameSize = Number of samples per frame
 // Return value = true:Success / false:Error
-bool	CFloat::FindDiffFloatPCM( long** ppLongBuf, long FrameSize )
+bool	CFloat::FindDiffFloatPCM( int** ppIntBuf, long FrameSize )
 {
 	long	iChannel, iSample;
 	float	floatFromPCM, Scale;
@@ -1312,12 +1319,12 @@ bool	CFloat::FindDiffFloatPCM( long** ppLongBuf, long FrameSize )
 			Scale = CIEEE32::PowOfTwo( m_IntRes - 1 );
 			// Sample loop
 			for( iSample=0; iSample<FrameSize; iSample++ ) {
-				if ( ppLongBuf[iChannel][iSample] == 0 ) {
-					FloatNum.Set( reinterpret_cast<unsigned long&>(m_ppFloatBuf[iChannel][iSample]) );
+				if ( ppIntBuf[iChannel][iSample] == 0 ) {
+					FloatNum.Set( reinterpret_cast<unsigned int&>(m_ppFloatBuf[iChannel][iSample]) );
 					FloatNum.Store( m_ppCBuffD[iChannel*FrameSize+iSample], true );
 					m_ppIEEE32numPCM[iChannel][iSample].Set( 0.f );
 				} else {
-					floatFromPCM = (float)ppLongBuf[iChannel][iSample] / Scale;
+					floatFromPCM = (float)ppIntBuf[iChannel][iSample] / Scale;
 					FloatNum.Set( m_ppFloatBuf[iChannel][iSample] );
 					if ( FloatNum.m_mantissa ) FloatNum.m_exp -= ( m_pShiftBit[iChannel] - IEEE754_EXP_BIASED );
 					m_ppIEEE32numPCM[iChannel][iSample].Set( floatFromPCM );
@@ -1327,12 +1334,12 @@ bool	CFloat::FindDiffFloatPCM( long** ppLongBuf, long FrameSize )
 		} else {
 			Scale = CIEEE32::PowOfTwo( m_IntRes - 1 - ( m_pShiftBit[iChannel] - IEEE754_EXP_BIASED ) );
 			for( iSample=0; iSample<FrameSize; iSample++ ) {
-				if ( ppLongBuf[iChannel][iSample] == 0 ) {
-					FloatNum.Set( reinterpret_cast<unsigned long&>(m_ppFloatBuf[iChannel][iSample]) );
+				if ( ppIntBuf[iChannel][iSample] == 0 ) {
+					FloatNum.Set( reinterpret_cast<unsigned int&>(m_ppFloatBuf[iChannel][iSample]) );
 					FloatNum.Store( m_ppCBuffD[iChannel*FrameSize+iSample], true );
 					m_ppIEEE32numPCM[iChannel][iSample].Set( 0.f );
 				} else {
-					y = (float)ppLongBuf[iChannel][iSample] / Scale;	// y'[]
+					y = (float)ppIntBuf[iChannel][iSample] / Scale;	// y'[]
 					floatFromPCM = CIEEE32::Multiple( y, a );			// x'[] = y'[] * a
 					FloatNum.Set( m_ppFloatBuf[iChannel][iSample] );	// x[][]
 					m_ppIEEE32numPCM[iChannel][iSample].Set( floatFromPCM );
@@ -1358,7 +1365,7 @@ unsigned long	CFloat::EncodeDiff( long FrameSize, bool RandomAccess, short MlzMo
 	unsigned char*	cpBuffAppend;
 	unsigned long	nGzipInByte, nNumByteAppend;
 	int				i, j, k, highest_bit, global_highest_byte, start_i, ch;
-	unsigned long	mask, start_ii;
+	unsigned int	mask, start_ii;
 	CIEEE32			fnum;
 	unsigned char	cpOut[4];
 	int				bit_count;
@@ -1374,7 +1381,7 @@ unsigned long	CFloat::EncodeDiff( long FrameSize, bool RandomAccess, short MlzMo
 
 	int            lengthAligned;
 	unsigned long  lindex;
-	unsigned long  acclong;
+	unsigned int  acclong;
 
 	unsigned long  numCharsOfPartA;
 	unsigned long  numCharsOfPartB;
@@ -1687,10 +1694,10 @@ unsigned long	CFloat::EncodeDiff( long FrameSize, bool RandomAccess, short MlzMo
 // FNum1, FNum2 = CIEEE32 objects to be compared
 // pDiffMantissa = Output buffer of mantissa difference
 // Return value = true:Success / false:Error
-bool	CFloat::DiffIEEE32num( unsigned char* cpOutput, const CIEEE32& FNum1, const CIEEE32& FNum2, unsigned long* pDiffMantissa )
+bool	CFloat::DiffIEEE32num( unsigned char* cpOutput, const CIEEE32& FNum1, const CIEEE32& FNum2, unsigned int* pDiffMantissa )
 {
 	unsigned char	cDiffExp, cHighestBit_1, cHighestBit_2;
-	unsigned long   mantissa1, mantissa2;
+	unsigned int   mantissa1, mantissa2;
 
 	cDiffExp = abs( FNum1.m_exp - FNum2.m_exp );
 	cHighestBit_1 = (unsigned char)FNum1.m_mantissa >> 23;
@@ -1734,7 +1741,7 @@ void	CFloat::ConvertFloatToRBuff( unsigned char* pRawBuf, long FrameSize )
 
 	for( iChannel=0; iChannel<m_Channels; iChannel++ ) {
 		for( iSample=0; iSample<FrameSize; iSample++ ) {
-			fx.Set( reinterpret_cast<unsigned long&>(m_ppAcfBuff[iChannel][iSample]) );
+			fx.Set( reinterpret_cast<unsigned int&>(m_ppAcfBuff[iChannel][iSample]) );
 			fx.Store( &pRawBuf[ ( iSample * m_Channels + iChannel ) * IEEE754_BYTES_PER_SAMPLE ] );
 		}
 	}
@@ -1745,9 +1752,9 @@ void	CFloat::ConvertFloatToRBuff( unsigned char* pRawBuf, long FrameSize )
 //           Reformat data            //
 //                                    //
 ////////////////////////////////////////
-// ppLongBuf = Long data buffer (input)
+// ppIntBuf = Long data buffer (input)
 // FrameSize = Number of samples per frame
-void	CFloat::ReformatData( long const* const* ppLongBuf, long FrameSize )
+void	CFloat::ReformatData( int const* const* ppIntBuf, long FrameSize )
 {
 	float	scale;
 	int		i, ch;
@@ -1756,13 +1763,13 @@ void	CFloat::ReformatData( long const* const* ppLongBuf, long FrameSize )
 
 	for( i=0; i<FrameSize; i++ ) {
 		for( ch=0; ch<m_Channels; ch++ ) {
-			if ( ppLongBuf[ch][i] == 0 ) {
+			if ( ppIntBuf[ch][i] == 0 ) {
 				m_ppAcfBuff[ch][i] = 0.f;
 			} else {
-				m_ppAcfBuff[ch][i] = (float)( ppLongBuf[ch][i] / scale );
+				m_ppAcfBuff[ch][i] = (float)( ppIntBuf[ch][i] / scale );
 //				// CAOUSION for debug
 //				if ( (m_ppAcfBuff[ch][i] == +0.0f) || (m_ppAcfBuff[ch][i] == -0.0f) ) {
-//					printf(" It's not good for decoder %d = %f\n", ppLongBuf[ch][i], m_ppAcfBuff[ch][i]);
+//					printf(" It's not good for decoder %d = %f\n", ppIntBuf[ch][i], m_ppAcfBuff[ch][i]);
 //				}
 			}
 		}
@@ -1778,21 +1785,21 @@ void	CFloat::ReformatData( long const* const* ppLongBuf, long FrameSize )
 // FrameSize = Number of samples per frame
 // RandomAccess = true:Random accessible frame
 // Return value = true:Success / false:Error
-bool	CFloat::DecodeDiff( FILE* fp, long FrameSize, bool RandomAccess )
+bool	CFloat::DecodeDiff( HALSSTREAM fp, long FrameSize, bool RandomAccess )
 {
 	unsigned long	destLen, nNumByteAppend;
 	unsigned long	bit_count;
 	unsigned char*	cpOutBuff;
 	unsigned char	tmp[4];
 	int				i, j, ch, startPos, highest_bit;
-	unsigned long	readbuf;
+	unsigned int	readbuf;
 	CIEEE32			fx;
 	bool			use_acf;
 	float			AcfGCF;
 	bool			shift_amp;
 
 	unsigned long  sum_all, numReadBits, readChars;
-	unsigned long  lindex, start_i, acclong;
+	unsigned int  lindex, start_i, acclong;
 	unsigned char  lengthAligned;
 
 	// added for lzm
@@ -1810,11 +1817,11 @@ bool	CFloat::DecodeDiff( FILE* fp, long FrameSize, bool RandomAccess )
 	m_BitIO.InitBitRead( m_pCbitBuff );
 	cpOutBuff = m_pCbitBuff;
 
-	// read ULongMSBfirst
+	// read UIntMSBfirst
 	for ( i = 0; i < 4; i++ ) {
 		if ( fread( &(tmp[i]), 1, 1, fp ) != 1 ) return false;
 	}
-	nNumByteAppend = (unsigned long)( ( tmp[0] << 24 ) | ( tmp[1] << 16 ) | ( tmp[2] << 8 ) | tmp[3] );
+	nNumByteAppend = (unsigned int)( ( static_cast<unsigned int>(tmp[0]) << 24 ) | ( static_cast<unsigned int>(tmp[1]) << 16 ) | ( static_cast<unsigned int>(tmp[2]) << 8 ) | tmp[3] );
 
 	if ( fread( m_pCBuffD, 1, nNumByteAppend, fp ) != nNumByteAppend ) return false;
 	destLen = FrameSize * m_Channels * IEEE754_BYTES_PER_SAMPLE * 2;
@@ -1928,7 +1935,7 @@ bool	CFloat::DecodeDiff( FILE* fp, long FrameSize, bool RandomAccess )
 
 				if ( readChars != numCharsOfPartA ) {
 					printf(" ERR(%d,%d)\n", readChars, numCharsOfPartA);
-					exit(0);
+					exit(3);
 				}
 				bit_count += numReadBits;
 				lindex = 0;
@@ -2001,7 +2008,7 @@ bool	CFloat::DecodeDiff( FILE* fp, long FrameSize, bool RandomAccess )
 
 				if ( readChars != numCharsOfPartB ) {
 					printf(" ERR(%d,%d)\n", readChars, numCharsOfPartB);
-					exit(0);
+					exit(3);
 				}
 				start_i = 0;
 				for( i=0; i<FrameSize; i++ ) {
@@ -2016,7 +2023,7 @@ bool	CFloat::DecodeDiff( FILE* fp, long FrameSize, bool RandomAccess )
 							acclong <<= WORD_SIZE;
 							if ( start_i > readChars ) {
 								printf(" ERR(%d,%d)\n", start_i, readChars);
-								exit(0);
+								exit(3);
 							}
 							acclong += larray[start_i++];
 						}
@@ -2059,7 +2066,7 @@ bool	CFloat::AddIEEEDiff( long FrameSize )
 	long			iChannel, iSample;
 	unsigned char	sign;
 	int		        e;
-	unsigned long   mantissa;
+	unsigned int   mantissa;
 	unsigned char	CBufD;
 	unsigned char*	pPCMtemp;
 	float			floattemp, a;
@@ -2070,7 +2077,7 @@ bool	CFloat::AddIEEEDiff( long FrameSize )
 		for( iSample=0; iSample<FrameSize; iSample++ ) {
 			if ( ( m_ppAcfBuff[iChannel][iSample] == 0.f ) || ( m_ppAcfBuff[iChannel][iSample] == -0.f ) ) {
 				FloatNum.Set( &m_pCBuffD[ ( iChannel * FrameSize + iSample ) * IEEE754_BYTES_PER_SAMPLE ], true );
-				*reinterpret_cast<unsigned long*>( &m_ppAcfBuff[iChannel][iSample] ) = *reinterpret_cast<unsigned long*>( &FloatNum.m_floatnum );
+				*reinterpret_cast<unsigned int*>( &m_ppAcfBuff[iChannel][iSample] ) = *reinterpret_cast<unsigned int*>( &FloatNum.m_floatnum );
 
 			} else {
 				if ( a == 1.f ) floattemp = m_ppAcfBuff[iChannel][iSample];
@@ -2140,7 +2147,7 @@ long CFloat::CheckZneZ( const float* pIn, float* pOut, float acf, long num )
 {
 	CIEEE32			fnum, fy1, fy2, fx1, fx, facf;
 	float			x1, y1;
-	unsigned long	mantissa, mask;
+	unsigned int	mantissa, mask;
 	int				e, MaxMag, zeros, diff;
 	unsigned char	sign;
 	bool			r = false;
@@ -2304,12 +2311,12 @@ int	CFloat::Check( const float* pIn, float* pOut, float acf, long num )
 {
 	CIEEE32			fnum, fy1, fy2, facf;
 	float			x1, y1;
-	unsigned long	mantissa;
+	unsigned int	mantissa;
 	int				e;
 	unsigned char	sign;
 	bool			r = false;
 	long			bx8Count, bx1Count, by8Count;
-	unsigned long	bx8, bx1, by8, by1;
+	unsigned int	bx8, bx1, by8, by1;
 	long			i;
 	
 	if ( ( acf == 0.f ) || ( acf == 1.f ) ) return 0; 
@@ -2405,7 +2412,7 @@ int	CFloat::Check( const float* pIn, float* pOut, float acf, long num )
 ////////////////////////////////////////
 void	CFloat::SearchUpward( float Target, float& x1, float& y1, const CIEEE32& facf )
 {
-	unsigned long	mantissa;
+	unsigned int	mantissa;
 	int				e;
 	unsigned char	sign;
 	CIEEE32			fy1, fy2;
@@ -2454,7 +2461,7 @@ void	CFloat::SearchUpward( float Target, float& x1, float& y1, const CIEEE32& fa
 ////////////////////////////////////////
 void	CFloat::SearchDownward( float Target, float& x1, float& y1, const CIEEE32& facf )
 {
-	unsigned long	mantissa;
+	unsigned int	mantissa;
 	int				e;
 	unsigned char	sign;
 	CIEEE32			fy1, fy2;
@@ -2507,29 +2514,29 @@ int	CFloat::EstimateMultiplier( const float* x, long FrameSize, float* agcd, int
 	long			cand;
 	long			mmm, ii, ii_max;
 	long			maxd, size, y, ind;
-	long			i, j, k, nm_med, dn_med, count;
-	unsigned long	nm_low, dn_low;
-	unsigned long	nm_high, dn_high;
-	unsigned long	g_low, g_high;
+	int			i, j, k, nm_med, dn_med, count;
+	unsigned int	nm_low, dn_low;
+	unsigned int	nm_high, dn_high;
+	unsigned int	g_low, g_high;
 	double			aa;
 	float			bb;
 	CIEEE32			fx;
-	unsigned long*	ulMantissa;
-	long*			nm_res;
-	long*			dns;
-	long*			dns_count;
+	unsigned int*	ulMantissa;
+	int*			nm_res;
+	int*			dns;
+	int*			dns_count;
 	// for fast search
 	CONVERGENCE_RES*	res;
 	FLOAT_EXP*		x2;
 	int				max_exp;
 
 	// memory allocation
-	ulMantissa = new unsigned long [FrameSize];
+	ulMantissa = new unsigned int [FrameSize];
 	x2         = new FLOAT_EXP [FrameSize];
 	res        = new CONVERGENCE_RES [X_CANDIDATES];
-	nm_res     = new long [X_CANDIDATES];
-	dns        = new long [X_CANDIDATES];
-	dns_count  = new long [X_CANDIDATES];
+	nm_res     = new int [X_CANDIDATES];
+	dns        = new int [X_CANDIDATES];
+	dns_count  = new int [X_CANDIDATES];
 
 	num_agcd_max = max_agcd_num;
 	num_agcd = 0;
@@ -2570,7 +2577,7 @@ int	CFloat::EstimateMultiplier( const float* x, long FrameSize, float* agcd, int
 
 	// sort ulMantissa[] in descending order
 	// size <= X_CANDIDATES;
-	qsort( ulMantissa, (size_t)size, sizeof(unsigned long), CompareUL );
+	qsort( ulMantissa, (size_t)size, sizeof(unsigned int), CompareUL );
 
 	if ( TRY_MAX > size )
 		ii_max = size;
@@ -2586,7 +2593,7 @@ int	CFloat::EstimateMultiplier( const float* x, long FrameSize, float* agcd, int
 		// find the intermediate convergent having the smallest denominator in the interval
 		int max_dn = 0;
 		for( i=0; i<size; i++ ) {
-			if ( ulMantissa[i] == (unsigned long)maxd ) {
+			if ( ulMantissa[i] == (unsigned int)maxd ) {
 				nm_res[i] = res[i].m_dn = 1;
 				res[i].m_idx = i;
 			} else if ( ulMantissa[i] > 0 ) {
@@ -2659,13 +2666,13 @@ int	CFloat::EstimateMultiplier( const float* x, long FrameSize, float* agcd, int
 
 		// count the # of convergents whose denominators divide dns[i]
 		int upper_limit, m;
-		unsigned long dns_m;
+		unsigned int dns_m;
 		for( mmm = ind = i = 0, upper_limit = 1; i < max_j; i++ ) {
 			if ( dns[i] <= 0 ) break;
 			if ( dns_inquire[i] == 0 ) continue;
 			count = dns_count[i];
 			// lower the upper limit position
-			dns_m = (unsigned long)( dns[i] / 2 );
+			dns_m = (unsigned int)( dns[i] / 2 );
 			while( ( upper_limit < max_j ) && ( dns[upper_limit] > dns_m ) )
 				upper_limit++;
 			if( ( upper_limit < max_j ) && ( ( dns[i] % dns[upper_limit] ) == 0) ) {
@@ -2678,7 +2685,7 @@ int	CFloat::EstimateMultiplier( const float* x, long FrameSize, float* agcd, int
 			}
 			// check for sub limit
 			for ( m = 3, j = upper_limit; j < max_j; m++ ) {
-				dns_m = (unsigned long)( dns[i] / m );
+				dns_m = (unsigned int)( dns[i] / m );
 				if ( dns_m <= 1 ) break;
 				while( ( j < max_j ) && ( dns[j] > dns_m ) )
 					j++;
@@ -2730,11 +2737,11 @@ int	CFloat::EstimateMultiplier( const float* x, long FrameSize, float* agcd, int
 //             Convergent             //
 //                                    //
 ////////////////////////////////////////
-void	CFloat::Convergent( long a, long b, long nm_end, long dn_end, CONVERGENT_FLAG flag, long* nm_med, long* dn_med )
+void	CFloat::Convergent( int a, int b, int nm_end, int dn_end, CONVERGENT_FLAG flag, int* nm_med, int* dn_med )
 {
-	long	nm = a, dn =b;
-	long	k, r, q, n, d, n0, n1, d0, d1;
-	long	nms[CONVERGENT_LEN], dns[CONVERGENT_LEN];
+	int	nm = a, dn =b;
+	int	k, r, q, n, d, n0, n1, d0, d1;
+	int	nms[CONVERGENT_LEN], dns[CONVERGENT_LEN];
 	int		i, j;
 
 	// nms[i]/dns[i]: i-th principal convergent
@@ -2809,9 +2816,9 @@ void	CFloat::Convergent( long a, long b, long nm_end, long dn_end, CONVERGENT_FL
 //                RED                 //
 //                                    //
 ////////////////////////////////////////
-void	CFloat::Red( unsigned long* a, unsigned long* b )
+void	CFloat::Red( unsigned int* a, unsigned int* b )
 {
-	unsigned long	aa, bb, t;
+	unsigned int	aa, bb, t;
 
 	aa = *a;
 	bb = *b;
@@ -2829,9 +2836,9 @@ void	CFloat::Red( unsigned long* a, unsigned long* b )
 //                GCD                 //
 //                                    //
 ////////////////////////////////////////
-unsigned long CFloat::Gcd( unsigned long a, unsigned long b)
+unsigned int CFloat::Gcd( unsigned int a, unsigned int b)
 {
-	unsigned long aa, bb, d;
+	unsigned int aa, bb, d;
 
 	aa = a;
 	bb = b;
@@ -2858,9 +2865,9 @@ unsigned long CFloat::Gcd( unsigned long a, unsigned long b)
 //                DET                 //
 //                                    //
 ////////////////////////////////////////
-long	CFloat::Det( unsigned long a, unsigned long b, unsigned long c, unsigned long d )
+int	CFloat::Det( unsigned int a, unsigned int b, unsigned int c, unsigned int d )
 {
-	return static_cast<long>( static_cast<INT64>( a ) * static_cast<INT64>( d ) - static_cast<INT64>( b ) * static_cast<INT64>( c ) );
+	return static_cast<int>( static_cast<INT64>( a ) * static_cast<INT64>( d ) - static_cast<INT64>( b ) * static_cast<INT64>( c ) );
 }
 
 ////////////////////////////////////////
@@ -2883,15 +2890,15 @@ int	CFloat::CompareFloat( const void* elem1, const void* elem2 )
 
 ////////////////////////////////////////
 //                                    //
-//    Compare unsigned long values    //
+//    Compare unsigned int values     //
 //                                    //
 ////////////////////////////////////////
-// elem1, elem2 = unsigned long values
+// elem1, elem2 = unsigned int values
 // Return value = 1:elem1<elem2 / 0:elem1==elem2 / -1:elem1>elem2
 int	CFloat::CompareUL( const void* elem1, const void* elem2 )
 {
-	unsigned long	e1 = *reinterpret_cast<const unsigned long*>( elem1 );
-	unsigned long	e2 = *reinterpret_cast<const unsigned long*>( elem2 );
+	unsigned int	e1 = *reinterpret_cast<const unsigned int*>( elem1 );
+	unsigned int	e2 = *reinterpret_cast<const unsigned int*>( elem2 );
 	return ( e1 == e2 ) ? 0 : ( e1 > e2 ) ? -1 : 1;
 }
 
@@ -2960,7 +2967,7 @@ void CFloat::BucketSortExp(const int range, const int max_mag_exp, const int len
 //          Insert DNS count          //
 //                                    //
 ////////////////////////////////////////
-void CFloat::InsertDNSCount( CDNS_COUNT* dns_count_large, int size, const long* dns_count, const int dns_idx )
+void CFloat::InsertDNSCount( CDNS_COUNT* dns_count_large, int size, const int* dns_count, const int dns_idx )
 {
 	for ( int i = 0; i < size; i++ ) {
 		if ( dns_count[dns_idx] > dns_count_large[i].m_count ) {

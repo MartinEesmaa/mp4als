@@ -411,7 +411,7 @@ int CMLZ::getHashIndex( // return num candidates of hash_index matched with code
   int *pCandidates,	// out: list of stringCodes
   int  numIndexMax		// in: maxnum of candidates
 ){
-	long mask;
+	int mask;
 	int  num_candidates, hash_index, offset;
 	bool dflag;	
 
@@ -750,7 +750,7 @@ int CMLZ::inputCode(
 ){
 	int i;
 	int tmpCode;
-	unsigned long data;
+	unsigned int data;
 
 	tmpCode = 0;
 	for ( i = 0; i < len; i++ ) {

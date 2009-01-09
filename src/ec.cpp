@@ -50,7 +50,7 @@ contents : Estimation of entropy codes
 #define LN2 0.69314718055994529
 
 // Calculate code parameter for Rice coding (returns s >= 0)
-short GetRicePara(long *x, long N, short *sx)
+short GetRicePara(int *x, long N, short *sx)
 {
 	short s;
 	long n;
@@ -86,7 +86,7 @@ short GetRicePara(long *x, long N, short *sx)
 
 // Calculate number of bits for Rice coding of one block x[0...N-1]
 // The code parameter must be s >= 0 
-long GetRiceBits(long *x, long N, short s)
+long GetRiceBits(int *x, long N, short s)
 {
 	long n, tmp, pre, sum = 0;
 

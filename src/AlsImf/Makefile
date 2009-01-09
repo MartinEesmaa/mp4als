@@ -1,4 +1,4 @@
-OBJ = ImfBox.o ImfBoxAmd1.o ImfDescriptor.o ImfFileStream.o ImfSampleEntry.o
+OBJ = ImfBox.o ImfDescriptor.o ImfFileStream.o ImfPrintStream.o ImfSampleEntry.o
 
 .PHONY: all clean
 

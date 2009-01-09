@@ -1,39 +1,31 @@
-/******************* MPEG-4 Audio Lossless Coding ******************
- ******************* MPEG-A Audio Archival MAF    ******************
+/***************** MPEG-4 Audio Lossless Coding *********************
 
 This software module was originally developed by
 
 NTT (Nippon Telegraph and Telephone Corporation), Japan
 
-in the course of development of the MPEG-4 Audio standard ISO/IEC 
-14496-3, associated amendments and the ISO/IEC 23000-6: Audio 
-Archival Multimedia Application Format standard.
-This software module is an implementation of a part of one or more 
-MPEG-4 Audio lossless coding tools as specified by the MPEG-4 Audio 
-standard and ISO/IEC 23000-6: Audio Archival Multimedia Application 
-Format tools  as specified by the MPEG-A Requirements.
-ISO/IEC gives users of the MPEG-4 Audio standards and of ISO/IEC 
-23000-6: Audio Archival Multimedia Application Format free license 
-to this software module or modifications thereof for use in hardware 
-or software products claiming conformance to MPEG-4 Audio and MPEG-A.
-Those intending to use this software module in hardware or software 
-products are advised that its use may infringe existing patents. 
-The original developer of this software module and his/her company, 
-the subsequent editors and their companies, and ISO/IEC have no 
-liability for use of this software module or modifications thereof 
-in an implementation.
-Copyright is not released for non MPEG-4 / MPEG-A conforming 
-products. The organizations named above retain full rights to use 
-the code for their own purpose, assign or donate the code to a third 
-party and inhibit third parties from using the code for non MPEG-4 / 
-MPEG-A conforming products.
+in the course of development of the MPEG-4 Audio standard ISO/IEC 14496-3
+and associated amendments. This software module is an implementation of
+a part of one or more MPEG-4 Audio lossless coding tools as specified
+by the MPEG-4 Audio standard. ISO/IEC gives users of the MPEG-4 Audio
+standards free license to this software module or modifications
+thereof for use in hardware or software products claiming conformance
+to the MPEG-4 Audio standards. Those intending to use this software
+module in hardware or software products are advised that this use may
+infringe existing patents. The original developer of this software
+module, the subsequent editors and their companies, and ISO/IEC have
+no liability for use of this software module or modifications thereof
+in an implementation. Copyright is not released for non MPEG-4 Audio
+conforming products. The original developer retains full right to use
+the code for the developer's own purpose, assign or donate the code to
+a third party and to inhibit third party from using the code for non
+MPEG-4 Audio conforming products. This copyright notice must be included
+in all copies or derivative works.
 
 Copyright (c) 2006.
 
-This notice must be included in all copies or derivative works.
-
 Filename : ImfFileStream.cpp
-Project  : MPEG-A Audio Archival Multimedia Application Format
+Project  : MPEG-4 Audio Lossless Coding
 Author   : Koichi Sugiura (NTT Advanced Technology Corporation)
            Noboru Harada  (NTT)
 Date     : August 31st, 2006
@@ -41,6 +33,16 @@ Contents : File stream classes
 
 *******************************************************************/
 
+/******************************************************************
+ *
+ * Modifications:
+ *
+ * 2007/05/23, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - moved CHexDumpStream class to ImfPrintStream.cpp.
+ *
+ ******************************************************************/
+
+#include	<string>
 #include	"ImfFileStream.h"
 
 using namespace NAlsImf;
@@ -431,103 +433,6 @@ bool	CFileWriter::Seek( IMF_INT64 Offset, SEEK_ORIGIN Origin )
 		return false;
 	}
 	return true;
-}
-
-//////////////////////////////////////////////////////////////////////
-//                                                                  //
-//                       CHexDumpStream class                       //
-//                                                                  //
-//////////////////////////////////////////////////////////////////////
-
-////////////////////////////////////////
-//                                    //
-//                Open                //
-//                                    //
-////////////////////////////////////////
-// OutStream = Output stream
-// Indent = Indent size in characters
-// Return value = true:Success / false:Error
-bool	CHexDumpStream::Open( std::ostream& OutStream, IMF_UINT16 Indent )
-{
-	if ( m_pStream != NULL ) { SetLastError( E_ALREADY_OPENED ); return false; }
-	
-	// Set pointer to output stream.
-	m_pStream = &OutStream;
-
-	// Initialize member variables.
-	m_Indent = Indent;
-	memset( m_Data, 0, sizeof(m_Data) );
-	m_Pos = 0;
-	return true;
-}
-
-////////////////////////////////////////
-//                                    //
-//               Close                //
-//                                    //
-////////////////////////////////////////
-// Return value = true:Success / false:Error
-bool	CHexDumpStream::Close( void )
-{
-	if ( m_pStream == NULL ) { SetLastError( E_NOT_OPENED ); return false; }
-
-	FlushLine();
-	m_pStream = NULL;
-	m_Indent = 0;
-	memset( m_Data, 0, sizeof(m_Data) );
-	m_Pos = 0;
-	return true;
-}
-
-////////////////////////////////////////
-//                                    //
-//             Write data             //
-//                                    //
-////////////////////////////////////////
-// pBuffer = Pointer to data
-// Size = Data size in bytes
-// Return value = Actually written byte count
-IMF_UINT32	CHexDumpStream::Write( const void* pBuffer, IMF_UINT32 Size )
-{
-	if ( m_pStream == NULL ) { SetLastError( E_NOT_OPENED ); return 0; }
-
-	IMF_UINT32			i;
-	const IMF_UINT8*	p = reinterpret_cast<const IMF_UINT8*>( pBuffer );
-
-	for( i=0; i<Size; i++ ) {
-		m_Data[m_Pos++] = *p++;
-		if ( m_Pos >= 16 ) {
-			FlushLine();
-			m_Pos = 0;
-		}
-	}
-	return Size;
-}
-
-////////////////////////////////////////
-//                                    //
-//            Flush a line            //
-//                                    //
-////////////////////////////////////////
-void	CHexDumpStream::FlushLine( void )
-{
-	IMF_UINT16	i;
-	IMF_UINT8	j;
-	char		StrBuf[16];
-
-	if ( m_Pos < 1 ) return;
-
-	// Make indent.
-	for( i=0; i<m_Indent; i++ ) *m_pStream << ' ';
-
-	// Hex dump.
-	for( j=0; j<m_Pos; j++ ) { sprintf( StrBuf, "%02X ", m_Data[j] ); *m_pStream << StrBuf; }
-	for( ; j<17; j++ ) *m_pStream << "   ";
-
-	// Ascii dump.
-	for( j=0; j<m_Pos; j++ ) *m_pStream << static_cast<char>( ( ( m_Data[j] >= 0x20 ) && ( m_Data[j] <= 0x7e ) ) ? m_Data[j] : '.' );
-	for( ; j<16; j++ ) *m_pStream << ' ';
-	*m_pStream << std::endl;
 }
 
 // End of ImfFileStream.cpp

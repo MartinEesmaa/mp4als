@@ -35,13 +35,13 @@ contents : 32-bit CRC (based on Nelson/Gailly "The Data Compression Book")
 #include "crc.h"
 
 // Table used to calculate the CRC values
-unsigned long Ccitt32Table[256];
+unsigned int Ccitt32Table[256];
 
 // Build the table
 void BuildCRCTable()
 {
 	short i, j;
-	unsigned long value;
+	unsigned int value;
 
 	for (i = 0; i <= 255; i++)
 	{
@@ -58,10 +58,10 @@ void BuildCRCTable()
 }
 
 // Calculate the CRC of a block of data
-unsigned long CalculateBlockCRC32(unsigned int count, unsigned long crc, void *buffer)
+unsigned int CalculateBlockCRC32(unsigned int count, unsigned int crc, void *buffer)
 {
 	unsigned char *p = (unsigned char *) buffer;
-	unsigned long temp1, temp2;
+	unsigned int temp1, temp2;
 
 	while (count-- != 0)
 	{
