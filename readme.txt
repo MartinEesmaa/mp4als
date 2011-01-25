@@ -1,19 +1,19 @@
 -----------------------------------------------------------------
-MPEG-4 Audio Lossless Coding - RM22 (Rev.2)
+MPEG-4 Audio Lossless Coding - RM23
 -----------------------------------------------------------------
 ftp://ftlabsrv.nue.tu-berlin.de/mp4lossless/refsoft
 -----------------------------------------------------------------
 Noboru Harada (NTT)
 Tilman Liebchen (Technical University of Berlin / LG Electronics)
 -----------------------------------------------------------------
-Last modified: January 9, 2009
+Last modified: January 25, 2011
 -----------------------------------------------------------------
 
 Files and Directories
 ---------------------
-/bin/win            - codec binary for Windows (/Release/mp4alsRM22rev2.exe)
+/bin/win            - codec binary for Windows (/Release/mp4alsRM23.exe)
 /lib                - object files required for adaptive prediction order
-/src                - reference model 22 rev 2 source code
+/src                - reference model 23 source code
 Makefile            - Makefile for Linux/Mac (GCC)
 mp4als_vc6.dsp      - MSVC 6.0 project file
 mp4als_vc6.dsw      - MSVC 6.0 workspace file
@@ -23,6 +23,43 @@ mp4als_vc8.vcproj   - Visual Studio 2005 VC++ project file
 mp4als_vc8.sln      - Visual Studio 2005 solution file
 mp4als_vc9.vcproj   - Visual Studio 2008 VC++ project file
 mp4als_vc9.sln      - Visual Studio 2008 solution file
+
+RM23 Notes (Changes from RM22)
+-------------------------------
+- decoder: check the bit-stream and report the profile levels it conforms to
+- decoder: report the profile levels indicated in MP4 files
+- decoder: fix a rounding error when channel sorting is enabled
+- decoder: fixed a limitation when joint stereo coding is used together
+           with block length switching
+- encoder: can enforce ALS Simple Profile Level 1 ("-sp1")
+- encoder: automatically set the profile level indicator in MP4 files unless
+           given the "-npi" option
+- encoder: force sample resolution = 32 for floating-point RAW files
+- encoder: support for samples rates higher than or equal to 288kHz
+- encoder: do not use the const block coding tool if the constant value
+           cannot be represented on IntRes bits
+- encoder: fixed vulnerability in Rice parameter estimation
+- encoder: correctly set the bs_info flags when joint stereo coding and
+           block length switching is used together
+- encoder: do not allow shorter block length than the fixed prediction order
+- use IntRes consistently in the integer coder
+- fixed memory leak in ImfBox.cpp, CBox::ReadString()
+- fixed memory leak in Mp4aFile.cpp, CMp4aReader::Open()
+- aligned the order of shift_amp[c] and partA_flag[c] flags with the
+  specification for floating-point audio
+- aligned the bit endianness of MLZ codewords with the specification (MSB
+  first instead of LSB first)
+- aligned NeedTdBit calculation with the ALS specification
+- fixed progressive coding of the residual for short frames
+- added workaround for MP4 files that contain multiple zero string
+  terminators in the 'hdlr' box
+- added support for FreeBSD (not well tested)
+---- Changes from RM23_20100305 ----
+- updated support for FreeBSD
+- encoder: do not allow the combination of -z# and any of the -g#, -s# or -t#
+           options
+- fixed stack overflows for frame lengths > 8192 in the RLS-LMS tool
+- fixed integer overflows for frame lengths >= 32768 in the RLS-LMS tool
 
 RM22 Notes (Changes from RM21)
 -------------------------------

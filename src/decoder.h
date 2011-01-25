@@ -84,6 +84,9 @@ contents : Header file for decoder.cpp
  *   - revised OpenInputFile() and OpenOutputFile().
  *   - added SetInputStream() and SetOutputStream().
  *
+ * 02/03/2010, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - removed xs and xps members.
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -94,6 +97,7 @@ contents : Header file for decoder.cpp
 #include "lms.h"
 #include "stream.h"
 #include "als2mp4.h"
+#include "profiles.h"
 
 class CLpacDecoder
 {
@@ -152,7 +156,7 @@ protected:
 	bool		mp4file;		// true:MP4 file format / false:ALS file format
 
 	unsigned char *bbuf, *tmpbuf;
-	int **x, **xp, **xs, **xps, *d, *cofQ;
+	int **x, **xp, *d, *cofQ;
 
 	CFloat			Float;		// Floating point class
 	MCC_DEC_BUFFER	MccBuf;		// Buffer for multi-channel correlation
@@ -162,13 +166,15 @@ protected:
 	char  RLSLMS_ext;
 	rlslms_buf_ptr rlslms_ptr;
 
+	ALS_PROFILES ConformantProfiles;
+
 public:
 	short MCCflag;				// Multi-channel correlation
 	CLpacDecoder();				// Constructor
 	~CLpacDecoder();			// Destructor
 	short CloseFiles();
-	short OpenInputFile( const char *name, bool mp4 ) { mp4file = mp4; CloseInput = ( OpenFileReader( name, &fpInput ) == 0 ); return CloseInput ? 0 : 1; }
-	short SetInputStream( HALSSTREAM hStream, bool mp4 ) { mp4file = mp4; fpInput = hStream; CloseInput = false; return 0; }
+	short OpenInputFile( const char *name, bool mp4 ) { mp4file = mp4; CloseInput = ( OpenFileReader( name, &fpInput ) == 0 ); ALSProfFillSet(ConformantProfiles); return CloseInput ? 0 : 1; }
+	short SetInputStream( HALSSTREAM hStream, bool mp4 ) { mp4file = mp4; fpInput = hStream; CloseInput = false; ALSProfFillSet(ConformantProfiles); return 0; }
 	short AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo, const MP4INFO& Mp4Info);
 	short OpenOutputFile( const char *name ) { CloseOutput = ( OpenFileWriter( name, &fpOutput ) == 0 ); return CloseOutput ? 0 : 1; }
 	short SetOutputStream( HALSSTREAM hStream ) { fpOutput = hStream; CloseOutput = false; return 0; }
@@ -177,6 +183,7 @@ public:
 	short DecodeAll( const MP4INFO& Mp4Info );
 	short DecodeFrame();		// Decode one frame
 	unsigned int GetCRC();
+	ALS_PROFILES GetConformantProfiles() const { return ConformantProfiles; }
 
 protected:
 	short DecodeBlock(int *x, long Nb, short ra);			// Decode one block

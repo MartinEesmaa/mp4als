@@ -50,7 +50,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=xilink6.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib /nologo /subsystem:console /machine:I386
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib lib/win/lpc_adapt_vc6_win32_release.obj /nologo /subsystem:console /machine:I386 /out:"bin/win/Release/mp4alsRM22rev2.exe"
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib lib/win/lpc_adapt_vc6_win32_release.obj /nologo /subsystem:console /machine:I386 /out:"bin/win/Release/mp4alsRM23.exe"
 # SUBTRACT LINK32 /profile
 
 !ELSEIF  "$(CFG)" == "mp4als - Win32 Debug"
@@ -75,7 +75,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=xilink6.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib /nologo /subsystem:console /debug /machine:I386 /pdbtype:sept
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib lib/win/lpc_adapt_vc6_win32_debug.obj /nologo /subsystem:console /debug /machine:I386 /nodefaultlib:"libc.lib" /out:"bin/win/Debug/mp4alsRM22rev2.exe" /pdbtype:sept
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib lib/win/lpc_adapt_vc6_win32_debug.obj /nologo /subsystem:console /debug /machine:I386 /nodefaultlib:"libc.lib" /out:"bin/win/Debug/mp4alsRM23.exe" /pdbtype:sept
 # SUBTRACT LINK32 /nodefaultlib
 
 !ENDIF 
@@ -106,6 +106,10 @@ SOURCE=.\src\crc.cpp
 # Begin Source File
 
 SOURCE=.\src\decoder.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\profiles.cpp
 # End Source File
 # Begin Source File
 
@@ -178,6 +182,10 @@ SOURCE=.\src\crc.h
 # Begin Source File
 
 SOURCE=.\src\decoder.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\profiles.h
 # End Source File
 # Begin Source File
 

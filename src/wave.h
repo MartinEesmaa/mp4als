@@ -67,6 +67,11 @@ contents : Header file for wave.cpp
  *   - modified WAVEFILEHEADER definition.
  *   - added ReadWaveFormat().
  *
+ * 09/04/2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - added RLSLMS field to ENCINFO
+ *   - changed the type of the "Chan" field in AUDIOINFO from "unsigned
+ *     short" to "unsigned int"
+ *
  *************************************************************************/
 
 #ifndef _INC_WAVE_H
@@ -145,7 +150,7 @@ typedef struct
 {
 	unsigned char	FileType;		// File Type (raw, wave, aiff, ...)
 	unsigned char	MSBfirst;		// Byte Order (0 = LSB first, 1 = MSB first)
-	unsigned short	Chan;			// Number of Channels
+	unsigned int	Chan;			// Number of Channels
 	unsigned short	Res;			// Actual resolution in Bits (1...32)
 	unsigned short	IntRes;			// Integer resolution in Bits
 	unsigned char	SampleType;		// Sample type (0=int, 1=float)
@@ -160,12 +165,13 @@ typedef struct
 	unsigned long FrameLength;		// Frame Length in Samples
 	unsigned char AdaptOrder;		// Adaptive Order (0 = off, 1 = on)
 	unsigned char JointCoding;		// Joint Channel Coding (0 = off, 1 = on)
-	unsigned char SubBlocks;		// Sbbblock Mode (0 = off, 1 = on)
+	unsigned char SubBlocks;		// Maximum Block Switching Levels (0 = off, 3, 4, 5)
 	unsigned short RandomAccess;	// Random Access (Frame Distance: 0 = off, 1 = each, 2 = every 2nd, ...)
 	unsigned char BGMC;				// BGMC coding for residual
 	unsigned short MaxOrder;		// Maximum Order (Fixed Order if 'Adaptive Order' = off)
 	unsigned char MCC;				// Multi-channel correlation (0 = off, 1 = on)
 	unsigned char PITCH;			// Pitch Coding (0 = off, 1 = on)
+	unsigned char RLSLMS;			// RLS-LMS mode
 	unsigned char RAflag;
 	unsigned char CRCenabled;
 } ENCINFO;

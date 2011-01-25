@@ -42,7 +42,14 @@ contents : Recursive Least Square, Least Mean Square and related functions
  *				- Correct the bitstream to follow the PDAM doc
  *				- clean up the code
  *
- * 
+ * Dec 7, 2009  - Use mode_table_192k for sampling rates higher than
+ *				  or equal to 192kHz.
+ *
+ * Dec 25, 2009 - Do not use the const block coding tool when the constant
+ *				  value cannot be represented on IntRes bits
+ *
+ * Jan 25, 2011 - Fix stack overflows for frame lengths > 8192
+ *				- Fix integer overflows for frame lengths >= 32768
  *
  *************************************************************************/
 
@@ -432,7 +439,7 @@ void update_ptr(W_TYPE *weight,BUF_TYPE *buf)
 void initCoefTable(short mode, unsigned char CoefTable)
 {		
 	memcpy((void*)&c_mode_table,
-		   &table_assigned[CoefTable][mode],sizeof(mtable));
+		   &table_assigned[MIN(CoefTable,2)][mode],sizeof(mtable));
 }
 
 /*************************************************************************/
@@ -657,14 +664,15 @@ inline void update_predictor(int *x, int y, BUF_TYPE *buf,
 //  The function output the residual error or orignal sample into the 
 //  array *d depending on encoding or decoding.
 /***********************************************************************/  
-void predict(int *x, int *d, short N,
+void predict(int *x, int *d, long N,
 			 rlslms_buf_ptr *rlslms_ptr,
 			 short ch, short RA, short mode)
 {
 	BUF_TYPE *buf;
 	W_TYPE *w;
 	P_TYPE *Pmatrix; 
-	short i,j, lambda, rls_order;
+	long i;
+	short j, lambda, rls_order;
 	INT64 pow[MAX_STAGES]; 
 	int predictor[MAX_STAGES];
 	int temp;
@@ -740,13 +748,14 @@ void predict(int *x, int *d, short N,
 //  the residual errors during encoding, while during decoding it
 // overwrite them with the orignal samples.
 /***********************************************************************/  
-void predict_joint(int *x_left, int *x_right, short N, 
+void predict_joint(int *x_left, int *x_right, long N, 
 				   rlslms_buf_ptr *rlslms_ptr, short RA, short mode)
 {
 	BUF_TYPE **buf;
 	W_TYPE **w;
 	P_TYPE **Pmatrix; 
-	short i, j, k, lambda, ch, rls_order;
+	long i;
+	short j, k, lambda, ch, rls_order;
 	INT64 pow[2][MAX_STAGES];
 	int predictor[MAX_STAGES],temp;
 	int *ch_ptr[2];
@@ -851,9 +860,9 @@ short lookup_table(short *table, short value)
 // Check if all samples in *x and *y  have the same value, if 
 // the difference is more than a threshold, return the threshold
 /*******************************************************************/ 
-long Left_equal_Right(int *x, int *y, int *z, short N)
+long Left_equal_Right(int *x, int *y, int *z, long N)
 {
-	short n;
+	long n;
 	long c, energy;
 
 	c = 1;
@@ -877,12 +886,13 @@ long Left_equal_Right(int *x, int *y, int *z, short N)
 // It accept a block of data x with length N and compute the residual
 // error using DPCM+mono RLS+LMS predictor
 /*******************************************************************/ 
-void analyze(int *x, short N,  rlslms_buf_ptr *rlslms_ptr, 
-			 short RA, MCC_ENC_BUFFER *mccbuf)
+void analyze(int *x, long N,  rlslms_buf_ptr *rlslms_ptr, 
+			 short RA, short IntRes, MCC_ENC_BUFFER *mccbuf)
 {
 	char *xpr0;
-	short i, ch;
-	int d[8192];
+	long i;
+	short ch;
+	int d[65536];
 
 	ch = rlslms_ptr->channel;
 	if (RA) { predict_init(rlslms_ptr);} // random access
@@ -891,7 +901,7 @@ void analyze(int *x, short N,  rlslms_buf_ptr *rlslms_ptr,
 	// ZERO BLOCK
 	if (BlockIsZero(x, N))
 		*xpr0 = 1;
-	else if (BlockIsConstant(x, N))
+	else if (BlockIsConstant(x, N, IntRes))
 		*xpr0 = 2;
     else
 	{
@@ -905,12 +915,13 @@ void analyze(int *x, short N,  rlslms_buf_ptr *rlslms_ptr,
 // It accept a block of residual error x with length N and reconstruct
 // the orignal samples using using DPCM+mono RLS+LMS predictor
 /*******************************************************************/ 
-void synthesize(int *x, short N, rlslms_buf_ptr *rlslms_ptr, 
+void synthesize(int *x, long N, rlslms_buf_ptr *rlslms_ptr, 
 				short RA, MCC_DEC_BUFFER *mccbuf)
 {
 	char *xpr0;
-	short i,ch;
-	int d[8192];
+	long i;
+	short ch;
+	int d[65536];
 	if (RA) { predict_init(rlslms_ptr);} // random access
 	ch = rlslms_ptr->channel;
 	xpr0 = &mccbuf->m_xpara[ch];
@@ -925,14 +936,15 @@ void synthesize(int *x, short N, rlslms_buf_ptr *rlslms_ptr,
 // the two block of residual errors using DPCM+Joints stereo RLS+LMS 
 // predictor
 /*******************************************************************/ 
-void analyze_joint(int *x0, int *x1, short N, rlslms_buf_ptr *rlslms_ptr,
-				   short RA, short *mono_frame, 
+void analyze_joint(int *x0, int *x1, long N, rlslms_buf_ptr *rlslms_ptr,
+				   short RA, short IntRes, short *mono_frame, 
 				   MCC_ENC_BUFFER *mccbuf)
 {
 	char *xpr0, *xpr1;
-	short i,ch;
+	long i;
+	short ch;
 	static short old_flag=0;
-	int x2[8192],d[8192];
+	int x2[65536],d[65536];
 	ch = rlslms_ptr->channel;
 	xpr0 = &mccbuf->m_xpara[ch];
 	xpr1 = &mccbuf->m_xpara[ch+1];
@@ -947,12 +959,12 @@ void analyze_joint(int *x0, int *x1, short N, rlslms_buf_ptr *rlslms_ptr,
 	// ZERO BLOCK
 	if (BlockIsZero(x0, N))
 		*xpr0 = 1;
-	else if (BlockIsConstant(x0, N))
+	else if (BlockIsConstant(x0, N, IntRes))
 		*xpr0 = 2;
 
 	if (BlockIsZero(x1,N))
 		*xpr1 = 1;
-	else if (BlockIsConstant(x1, N))
+	else if (BlockIsConstant(x1, N, IntRes))
 		*xpr1 = 2;
 
 	if (*xpr0!=0 && *xpr1!=0) /* both block is zero */
@@ -989,11 +1001,11 @@ void analyze_joint(int *x0, int *x1, short N, rlslms_buf_ptr *rlslms_ptr,
 	}
 	if (BlockIsZero(x0, N))	
 		*xpr0 = 1;
-	else if (BlockIsConstant(x0, N)) 
+	else if (BlockIsConstant(x0, N, IntRes)) 
 		*xpr0 = 2;
 	if (BlockIsZero(x1,N))
 		*xpr1 = 1;
-	else if (BlockIsConstant(x1, N))
+	else if (BlockIsConstant(x1, N, IntRes))
 		*xpr1 = 2;
 
 	if (*xpr1!=0 && *xpr0!=0) *xpr1=0; 
@@ -1005,12 +1017,13 @@ void analyze_joint(int *x0, int *x1, short N, rlslms_buf_ptr *rlslms_ptr,
 // reconstruct the orignal samples using DPCM+Joints stereo RLS+LMS 
 // predictors
 /*******************************************************************/ 
-void synthesize_joint(int *x0, int *x1, short N, rlslms_buf_ptr *rlslms_ptr,
+void synthesize_joint(int *x0, int *x1, long N, rlslms_buf_ptr *rlslms_ptr,
 					  short RA, short mono_frame, MCC_DEC_BUFFER *mccbuf)
 {
-	int d[8192];
+	int d[65536];
 	char *xpr0,*xpr1;
-	short i,ch;
+	long i;
+	short ch;
 	static short old_flag=0;
 	ch = rlslms_ptr->channel;
 	xpr0 = &mccbuf->m_xpara[ch];

@@ -39,6 +39,9 @@
  *  - added m_UseMeta in MP4INFO structure.
  *  - added CCopyData::CCopyData() with 1 parameter.
  *
+ * Sep 4, 2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *  - added support for reading/writing the audio profile level.
+ *
  ************************************************************************/
 
 #if !defined( ALS2MP4_INCLUDED )
@@ -124,6 +127,9 @@ enum A2MERR {
 	A2MERR_RAU_TOO_BIG,			// Random access unit is too big.
 };
 
+#define MP4_AUDIO_PROFILE_UNSPECIFIED	0xfe
+#define MP4_AUDIO_PROFILE_ALS_SP_L1		0x3c
+
 //////////////////////////////////////////////////////////////////////
 //                    MP4 information structure                     //
 //////////////////////////////////////////////////////////////////////
@@ -144,6 +150,7 @@ typedef	struct tagMP4INFO {
 	std::string			m_FileTypeName;		// MIME type
 	bool				m_RMflag;			// true:Used in mp4alsRM / false:Used in als2mp4
 	bool				m_UseMeta;			// true:Use meta box / false:Do not use meta box
+	NAlsImf::IMF_UINT8	m_audioProfileLevelIndication;
 } MP4INFO;
 
 //////////////////////////////////////////////////////////////////////

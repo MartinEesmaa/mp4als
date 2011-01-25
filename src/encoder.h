@@ -106,6 +106,10 @@ contents : Header file for encoder.cpp
  *   - added oafi_flag member variable in CLpacEncoder class.
  *   - added oafi parameter to OpenOutputFile() and SetOutputFile().
  *
+ * 09/04/2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - added support for enforcing profile levels
+ *   - added support for checking conformant profile levels
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -115,6 +119,7 @@ contents : Header file for encoder.cpp
 #include "mcc.h"
 #include "lms.h"
 #include "stream.h"
+#include "profiles.h"
 
 class CLpacEncoder
 {
@@ -191,6 +196,9 @@ protected:
 	char RLSLMS_ext;
 	rlslms_buf_ptr rlslms_ptr;
 
+	ALS_PROFILES EnforcedProfiles;
+	ALS_PROFILES ConformantProfiles;
+
 public:
 	long MCCflag;					// Multi-channel correlation method	CLpacEncoder();	
 	CLpacEncoder();					// Constructor
@@ -200,8 +208,8 @@ public:
 	short EncodeFrame();			// Encode one frame
 	void GetFilePositions(ALS_INT64 *SizeIn, ALS_INT64 *SizeOut);	// Current file pointer positions
 
-	short OpenInputFile( const char *name ) { CloseInput = ( OpenFileReader( name, &fpInput ) == 0 ); return CloseInput ? 0 : 1; }
-	short SetInputFile( HALSSTREAM hStream ) { fpInput = hStream; CloseInput = false; return 0; }
+	short OpenInputFile( const char *name ) { CloseInput = ( OpenFileReader( name, &fpInput ) == 0 ); ALSProfFillSet( ConformantProfiles ); ALSProfEmptySet( EnforcedProfiles ); return CloseInput ? 0 : 1; }
+	short SetInputFile( HALSSTREAM hStream ) { fpInput = hStream; CloseInput = false; ALSProfFillSet( ConformantProfiles ); ALSProfEmptySet( EnforcedProfiles ); return 0; }
 	short AnalyseInputFile(AUDIOINFO *ainfo);
 	short SpecifyAudioInfo(AUDIOINFO *ainfo);
 	short OpenOutputFile( const char *name, bool mp4, bool oafi ) { mp4file = mp4; oafi_flag = oafi; CloseOutput = ( OpenFileWriter( name, &fpOutput ) == 0 ); return CloseOutput ? 0 : 1; }
@@ -236,10 +244,14 @@ public:
 	short SetMlz(short MlzMode);
 	short SetMCCnoJS(short MCCnoJS);
 	short SetCRC(short CRCenabled);
+	void SetEnforcedProfiles(ALS_PROFILES profiles) { EnforcedProfiles = profiles; EnforceProfiles(); }
+	ALS_PROFILES GetConformantProfiles() const { return ConformantProfiles; }
 
 protected:
 	long EncodeBlock(int *x, unsigned char *bytebuf);		// Encode block
 	void EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, int *d); //MCC
 	long EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, int *x, unsigned char *bytebuf, long gmod); //MCC
 	void LTPanalysis(MCC_ENC_BUFFER *pBuffer, long Channel, long N, short optP, int *x);
+
+	bool EnforceProfiles();
 };

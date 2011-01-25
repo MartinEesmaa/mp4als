@@ -47,6 +47,13 @@ Contents : Box classes defined in ISO/IEC 14496-12
  * 2008/10/20, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
  *   - added CContainerFullBox class.
  *
+ * 2009/09/07, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - fixed a memory leak in CBox::ReadString().
+ *
+ * 2009/11/16, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - added workaround for MP4 files that contain multiple zero
+ *     string terminators in the 'hdlr' box.
+ *
  ******************************************************************/
 
 #include	<iostream>
@@ -651,8 +658,8 @@ bool	CBox::ReadString( CBaseStream& Stream, string& String, IMF_INT64 MaxLen )
 	}
 	catch( IMF_UINT32 e ) {
 		SetLastError( e );
-		delete[] pBuf;
 	}
+	delete[] pBuf;
 	return Result;
 }
 
@@ -1369,6 +1376,11 @@ bool	CHandlerBox::Read( CBaseStream& Stream )
 		if ( !Stream.Read32( Dummy ) || !Stream.Read32( m_handler_type ) ) throw E_READ_STREAM;
 		if ( !Stream.Read32( Dummy ) || !Stream.Read32( Dummy ) || !Stream.Read32( Dummy ) ) throw E_READ_STREAM;
 		if ( !ReadString( Stream, m_name, GetDataSize() - 20 ) ) return false;
+		while ( CheckReadSize( Stream ) < 0 ) { /* Workaround for extra zero terminators */
+			IMF_UINT8 Zero;
+			if ( !Stream.Read8( Zero ) ) throw E_READ_STREAM;
+			if ( Zero != 0 ) throw E_BOX_SIZE; /* Fail if not zero terminator */
+		}
 		if ( CheckReadSize( Stream ) != 0 ) throw E_BOX_SIZE;
 	}
 	catch( IMF_UINT32 e ) {

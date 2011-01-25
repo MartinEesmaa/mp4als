@@ -69,6 +69,10 @@ Contents : MPEG-4 Audio reader and writer
  *   - added GetDecSpecInfo(), GetDecSpecInfoSize() and 
  *     SetDecSpecInfo() to CMp4aWriter class.
  *
+ * 2009/09/04, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - added support for reading/writing the audio profile
+ *     indicator
+ *
  ******************************************************************/
 
 #if !defined( MP4AFILE_INCLUDED )
@@ -166,6 +170,7 @@ namespace NAlsImf {
 		virtual	void		GetFileType( IMF_UINT8& FileType, std::string& MimeType ) const { FileType = m_OrgFileType; MimeType = m_OrgMimeType; }
 		virtual	bool		Close( void );
 		IMF_UINT32			GetLastError( void ) const { return m_LastError; }
+		IMF_UINT8			GetAudioProfileLevelIndication() const { return m_audioProfileLevelIndication; }
 	protected:
 		void				SetLastError( IMF_UINT32 ErrCode ) { m_LastError = ErrCode; }
 		CBaseStream*			m_pStream;					// Pointer to input stream
@@ -183,6 +188,7 @@ namespace NAlsImf {
 		IMF_UINT64				m_AuxDataOffset;			// Auxiliary data offset
 		IMF_UINT64				m_AuxDataSize;				// Auxiliary data size in bytes
 		IMF_UINT32				m_LastError;				// Last error code
+		IMF_UINT8				m_audioProfileLevelIndication;
 	};
 
 	//////////////////////////////////////////////////////////////////////
@@ -210,6 +216,7 @@ namespace NAlsImf {
 		virtual	bool		Close( void );
 		virtual	CBox*		CreateBox( IMF_UINT32 Type, IMF_UINT32 HandlerType = 0 );
 		IMF_UINT32			GetLastError( void ) const { return m_LastError; }
+		void				SetAudioProfileLevelIndication( IMF_UINT8 AudioProfileLevelIndication ) { m_audioProfileLevelIndication = AudioProfileLevelIndication; }
 	protected:
 		virtual	CBox*		CreateFtyp( void );
 		virtual	CBox*		CreateMoov( void );
@@ -264,6 +271,7 @@ namespace NAlsImf {
 		IMF_INT64				m_AuxDataSize;				// Auxiliary data size in bytes
 		IMF_INT64				m_AuxDataOffset;			// Auxiliary data offset
 		IMF_UINT32				m_LastError;				// Last error code
+		IMF_UINT8				m_audioProfileLevelIndication;
 	};
 }
 

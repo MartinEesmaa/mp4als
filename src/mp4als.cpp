@@ -174,6 +174,15 @@ contents : Main file for MPEG-4 Audio Lossless Coding framework
  *   - fixed some printf format strings
  *   - changed version to RM22rev1.
  *
+ * 09/04/2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - changed version to RM23
+ *   - added support for reading/writing audio profile levels
+ *
+ * 01/24/2011, Csaba Kos <csaba.kos@as.ssh.ntt-at.co.jp>
+ *   - added SYSTEM_STR for FreeBSD
+ *   - do not allow the combination of -z# and any of the -g#, -s# or -t#
+ *     options
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -196,6 +205,8 @@ contents : Main file for MPEG-4 Audio Lossless Coding framework
 	#define SYSTEM_STR "Linux"
 #elif defined( __APPLE__ )
 	#define SYSTEM_STR "Mac OS X"
+#elif defined( __FreeBSD__ )
+	#define SYSTEM_STR "FreeBSD"
 #else
 	#define SYSTEM_STR "(unknown)"
 #endif
@@ -206,7 +217,7 @@ contents : Main file for MPEG-4 Audio Lossless Coding framework
 #define	PRINTF_LL	"%lld"
 #endif
 
-#define CODEC_STR "mp4alsRM22rev1"
+#define CODEC_STR "mp4alsRM23"
 #define	ALS_TMP_FILENAME	CODEC_STR ".$$$"
 
 void ShowUsage(void);
@@ -234,6 +245,7 @@ int main(int argc, char **argv)
 	mp4info.m_FileType = 0;
 	mp4info.m_RMflag = false;
 	mp4info.m_UseMeta = false;
+	mp4info.m_audioProfileLevelIndication = MP4_AUDIO_PROFILE_UNSPECIFIED;
 
 	// Check parameters ///////////////////////////////////////////////////////////////////////////
 	if (argc == 1)								// "codec" without parameters
@@ -371,6 +383,15 @@ int main(int argc, char **argv)
 			exit(3);
 		}
 
+		// Set up enforced profiles
+		ALS_PROFILES EnforcedProfiles;
+		ALSProfEmptySet( EnforcedProfiles );
+		switch (GetOptionValue( argc, argv, "-sp", 0 )) {
+			case 1: ALSProfAddSet( EnforcedProfiles, ALS_SIMPLE_PROFILE_L1 ); break;
+			default: break;
+		}
+		encoder.SetEnforcedProfiles( EnforcedProfiles );
+
 		// Raw input file
 		if (encoder.SetRawAudio(CheckOption(argc, argv, "-R")))
 		{
@@ -447,7 +468,7 @@ int main(int argc, char **argv)
 		short ra = encoder.SetRA(GetOptionValue(argc, argv, "-r"));
 		encoder.SetRAmode(GetOptionValue(argc, argv, "-u"));
 		encoder.SetBGMC(CheckOption(argc, argv, "-b"));				// BGMC mode
-		encoder.SetMCC(GetOptionValue(argc, argv, "-t"));			// Two methods mode (Joint Stereo and Multi-channel correlation)
+		long mccval = encoder.SetMCC(GetOptionValue(argc, argv, "-t"));			// Two methods mode (Joint Stereo and Multi-channel correlation)
 		encoder.SetPITCH(CheckOption(argc, argv, "-p"));			// PITCH mode (LTP)
 		short bs = GetOptionValue(argc, argv, "-g");				// block switching level
 		encoder.SetSub(bs);
@@ -456,12 +477,23 @@ int main(int argc, char **argv)
 		long mccnojs = GetOptionValue(argc, argv, "-s");
 		if (mccnojs)
 		{
-			if (encoder.SetMCC(mccnojs))
+			if ((mccval = encoder.SetMCC(mccnojs)))
 				encoder.SetMCCnoJS(1);
 			encoder.SetJoint(-1);
 		}
 
-		encoder.SetHEMode(GetOptionValue(argc, argv, "-z"));
+		short rlslms = encoder.SetHEMode(GetOptionValue(argc, argv, "-z"));
+
+		if (mccval != 0 && rlslms != 0)
+		{
+			fprintf( stderr, "\nMCC (-%c#) cannot be used together with RLS-LMS (-z#).\n", (mccnojs ? 's' : 't') );
+			exit( 3 );
+		}
+		if (bs != 0 && rlslms != 0)
+		{
+			fprintf( stderr, "\nBlock switching (-g#) cannot be used together with RLS-LMS (-z#).\n" );
+			exit( 3 );
+		}
 
 		// Optimum compression
 		if (CheckOption(argc, argv, "-7"))
@@ -618,6 +650,12 @@ int main(int argc, char **argv)
 
 		// Converting ALS to MP4 //////////////////////////////////////////////////////////////////
 		if ( mp4file ) {
+			if ( !CheckOption( argc, argv, "-npi" ) ) {
+				// Set the indicated profile levels
+				if ( ALSProfIsMember( encoder.GetConformantProfiles(), ALS_SIMPLE_PROFILE_L1 ) )
+					mp4info.m_audioProfileLevelIndication = MP4_AUDIO_PROFILE_ALS_SP_L1;
+			}
+
 			A2MERR	A2mErr = AlsToMp4( mp4info );
 			if ( A2mErr != A2MERR_NONE ) {
 				fprintf( stderr, "\nERROR: Unable to convert ALS to MP4: %s\n", ToErrorString( A2mErr ) );
@@ -753,6 +791,9 @@ int main(int argc, char **argv)
 	else
 	{
 		CLpacDecoder decoder;
+		ALS_PROFILES IndicatedProfiles;
+
+		ALSProfEmptySet( IndicatedProfiles );
 
 		if (autoname)		// Automatic generation of output file name
 		{
@@ -824,6 +865,10 @@ int main(int argc, char **argv)
 				fprintf( stderr, "\nERROR: Unable to convert MP4 to ALS: %s\n", ToErrorString( A2mErr ) );
 				remove( ALS_TMP_FILENAME );
 				exit( 1 );
+			}
+			switch ( mp4info.m_audioProfileLevelIndication ) {
+				case 0x3c: ALSProfAddSet( IndicatedProfiles, ALS_SIMPLE_PROFILE_L1 ); break;
+				default: break;
 			}
 		}
 
@@ -1013,6 +1058,15 @@ int main(int argc, char **argv)
 		{
 			printf(" done\n");
 			printf("\nCRC status: %s\n", encinfo.CRCenabled ? (crc ? "FAILED!" : "ok") : "n/a");
+
+			printf("\nDeclared Profiles      : %s\n", ALSProfToString(IndicatedProfiles).c_str());
+			printf("Conformant Profiles    : %s\n", ALSProfToString(decoder.GetConformantProfiles()).c_str());
+
+			ALS_PROFILES InvalidProfiles = IndicatedProfiles;
+			ALSProfDelSet( InvalidProfiles, decoder.GetConformantProfiles() );
+			if ( !ALSProfIsEmpty( InvalidProfiles ) ) {
+				printf("!! Invalid Profiles !! : %s\n", ALSProfToString(InvalidProfiles).c_str());
+			}
 			fflush(stdout);
 		}
 		else if ((encinfo.CRCenabled) && (crc > 0))
@@ -1056,7 +1110,7 @@ void ShowUsage()
 void ShowHelp()
 {
 	printf("\n%s - MPEG-4 Audio Lossless Coding (ALS), Reference Model Codec", CODEC_STR);
-    printf("\n  Version 22 for %s", SYSTEM_STR);
+    printf("\n  Version 23 for %s", SYSTEM_STR);
 	printf("\n  (c) 2003-2008 Tilman Liebchen, TU Berlin / LG Electronics");
 	printf("\n    E-mail: liebchen@nue.tu-berlin.de");
     printf("\n  Portions by Yuriy A. Reznik, RealNetworks, Inc.");
@@ -1098,6 +1152,7 @@ void ShowHelp()
 	printf("\n  -r# : Random access (multiples of 0.1 sec), -1 = each frame, 0 = off (default)");
 	printf("\n  -s# : Multi-channel correlation (#=1-65536, jointly code every # channels)");
 	printf("\n        # must be a divisor of number of channels, otherwise -s is ignored");
+	printf("\n  -sp#: Enforce ALS Simple Profile Level # (currently only #=1 is defined)");
 	printf("\n  -t# : Two methods mode (Joint Stereo and Multi-channel correlation)");
 	printf("\n        # must be a divisor of number of channels");
 	printf("\n  -u# : Random access info location, 0 = frames (default), 1 = header, 2 = none");
@@ -1105,6 +1160,7 @@ void ShowHelp()
 	printf("\nMP4 File Format Support:");
 	printf("\n  -MP4: Use MP4 file format for compressed file (default if extension is .mp4)");
 	printf("\n  -OAFI:Force to embed meta box with oafi record");
+	printf("\n  -npi: Do not indicate the conformant profiles in the MP4 file");
 	printf("\nAudio file support:");
 	printf("\n  -R  : Raw audio file (use -C, -W, -F and -M to specify format)");
 	printf("\n  -S# : Sample type: 0 = integer (default), 1 = float");

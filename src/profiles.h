@@ -24,25 +24,43 @@ in all copies or derivative works.
 
 Copyright (c) 2003.
 
-filename : ec.h
+filename : profiles.h
 project  : MPEG-4 Audio Lossless Coding
 author   : Tilman Liebchen (Technical University of Berlin)
-date     : June 23, 2003
-contents : Header file for ec.cpp
+date     : September 4, 2009
+contents : ALS Profiles
 
 *************************************************************************/
 
 /*************************************************************************
- *
  * Modifications:
  *
- * 8/31/2003, Yuriy A. Reznik <yreznik@real.com>
- *   - added parameter sx in GetRicePara()
+ * 09/04/2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *  - Initial version.
  *
- * 12/25/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
- *   - added parameter "start" to GetRicePara()
- *
- *************************************************************************/
+ ************************************************************************/
 
-short GetRicePara(int *x, short start, long N, short *sx);
-long GetRiceBits(int *x, long N, short s);
+#ifndef MP4ALS_PROFILES_H
+#define MP4ALS_PROFILES_H
+
+#include <string>
+#include "wave.h"
+
+// Bitmask
+enum ALS_PROFILES {
+	ALS_SIMPLE_PROFILE_L1 = 1	// ALS Simple Profile Level 1
+};
+
+extern bool ALSProfIsEmpty (ALS_PROFILES profiles);
+extern void ALSProfEmptySet(ALS_PROFILES &profiles);
+extern void ALSProfFillSet (ALS_PROFILES &profiles);
+extern bool ALSProfIsMember(ALS_PROFILES profiles,  ALS_PROFILES p);
+extern void ALSProfAddSet  (ALS_PROFILES &profiles, ALS_PROFILES p);
+extern void ALSProfDelSet  (ALS_PROFILES &profiles, ALS_PROFILES p);
+
+extern std::string ALSProfToString(ALS_PROFILES profiles);
+
+extern void CheckAlsProfiles_Header   (ALS_PROFILES &profiles, const AUDIOINFO *ainfo, const ENCINFO *encinfo);
+extern void CheckAlsProfiles_MCCStages(ALS_PROFILES &profiles, int MCCStages);
+
+#endif /* !MP4ALS_PROFILES_H */

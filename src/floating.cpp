@@ -116,6 +116,9 @@ contents : Floating-point PCM support
  * 10/22/2008, Koichi Sugiura <koichi.sugiura@ntt-at.cojp>
  *   - modified process exit code.
  *
+ * 09/17/2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - Fixed the order of shift_amp[c] and partA_flag[c] flags.
+ *
  ************************************************************************/
 
 #include	<cstdio>
@@ -1504,6 +1507,15 @@ unsigned long	CFloat::EncodeDiff( long FrameSize, bool RandomAccess, short MlzMo
 			}
 		}
 
+		// shift_amp[c]
+		if ( m_pShiftBit[ch] == m_pLastShiftBit[ch] ) {
+			m_BitIO.WriteBits( 0, 1 );
+			bit_count++;
+		} else {
+			m_BitIO.WriteBits( 1, 1 );
+			bit_count++;
+		}
+
 		if ( sum_all == 0 ) { // PartA doesn't exist
 			m_BitIO.WriteBits( 0, 1 );
 			bit_count++;
@@ -1512,14 +1524,10 @@ unsigned long	CFloat::EncodeDiff( long FrameSize, bool RandomAccess, short MlzMo
 			bit_count++;
 		}
 
-		// shift_amp[c]
-		if ( m_pShiftBit[ch] == m_pLastShiftBit[ch] ) {
-			m_BitIO.WriteBits( 0, 1 );
-			bit_count++;
-		} else {
-			m_BitIO.WriteBits( 1, 1 );		
+		// shift_value[c]
+		if ( m_pShiftBit[ch] != m_pLastShiftBit[ch] ) {
 			m_BitIO.WriteBits( m_pShiftBit[ch], 8 );
-			bit_count += 9;
+			bit_count += 8;
 			m_pLastShiftBit[ch] = m_pShiftBit[ch];
 		}
 
@@ -1867,15 +1875,15 @@ bool	CFloat::DecodeDiff( HALSSTREAM fp, long FrameSize, bool RandomAccess )
 		bit_count += 2;
 		m_pGhb[ch] = static_cast<int>( readbuf );
 		
-		// does PartA exist?
-		m_BitIO.ReadBits( &readbuf, 1 );
-		bit_count++;
-		sum_all = readbuf;
-
 		// shift_amp[c]
 		m_BitIO.ReadBits( &readbuf, 1 );
 		bit_count++;
 		shift_amp = ( readbuf != 0 );
+
+		// does PartA exist?
+		m_BitIO.ReadBits( &readbuf, 1 );
+		bit_count++;
+		sum_all = readbuf;
 
 		if ( shift_amp ) {
 			// shift_value

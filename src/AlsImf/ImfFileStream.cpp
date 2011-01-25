@@ -40,6 +40,9 @@ Contents : File stream classes
  * 2007/05/23, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
  *   - moved CHexDumpStream class to ImfPrintStream.cpp.
  *
+ * 2011/01/24, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - added detection of FreeBSD.
+ *
  ******************************************************************/
 
 #include	<string>
@@ -108,7 +111,7 @@ int	fseek64_win( FILE* fp, __int64 offset, int origin )
 #define	FTELL64( a )		ftello64( a )
 #define	FTRUNCATE64( a )	ftruncate64( fileno( a ), ftello64( a ) )
 
-#elif defined( __APPLE__ ) && defined( __GNUG__ )
+#elif (defined( __APPLE__ ) || defined( __FreeBSD__ )) && defined( __GNUG__ )
 
 //----------------------------------------
 // For Mac OS X / g++

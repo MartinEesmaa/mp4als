@@ -1,4 +1,4 @@
-OBJ = als2mp4.o audiorw.o cmdline.o crc.o decoder.o ec.o encoder.o floating.o lms.o lpc.o mcc.o mlz.o mp4als.o rn_bitio.o wave.o stream.o
+OBJ = als2mp4.o audiorw.o cmdline.o crc.o decoder.o ec.o encoder.o floating.o lms.o lpc.o mcc.o mlz.o mp4als.o rn_bitio.o wave.o stream.o profiles.o
 INCLUDE = -IAlsImf -IAlsImf/Mp4
 
 all: $(OBJ)
@@ -13,9 +13,9 @@ als2mp4.o: als2mp4.cpp als2mp4.h cmdline.h wave.h
 audiorw.o: audiorw.cpp floating.h stream.h
 cmdline.o: cmdline.cpp
 crc.o: crc.cpp crc.h
-decoder.o: decoder.cpp decoder.h bitio.h lpc.h audiorw.h crc.h wave.h floating.h mcc.h lms.h
+decoder.o: decoder.cpp decoder.h bitio.h lpc.h audiorw.h crc.h wave.h floating.h mcc.h lms.h profiles.h
 ec.o: ec.cpp
-encoder.o: encoder.cpp encoder.h lpc.h lms.h ec.h bitio.h audiorw.h crc.h wave.h floating.h lpc_adapt.h mcc.h stream.h
+encoder.o: encoder.cpp encoder.h lpc.h lms.h ec.h bitio.h audiorw.h crc.h wave.h floating.h lpc_adapt.h mcc.h stream.h profiles.h
 floating.o: floating.cpp floating.h mlz.h stream.h
 lms.o: lms.cpp lms.h
 lpc.o: lpc.cpp
@@ -33,3 +33,4 @@ lms.h: mcc.h
 mcc.h: bitio.h
 mlz.h: bitio.h
 wave.h: stream.h
+profiles.o: profiles.cpp profiles.h

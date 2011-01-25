@@ -46,6 +46,10 @@ contents : Masked-LZ support
  * 05/19/2005, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
  *  - removed non-fatal error messages.
  *
+ * 09/17/2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *  - Modified outputCode() to write bits in MSB order.
+ *  - Modified inputCode() to read bits in MSB order.
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -314,13 +318,10 @@ unsigned long CMLZ::Encode(		//ret: encoded size (bits)
 int CMLZ::outputCode(
 	int stringCode
 ){
-	int tmpCode;
 	int  i;
-	tmpCode = stringCode;
 	for ( i = 0; i < m_DicCodeBit; i++ ) {
 		if ( m_pOutPosition >= m_SizeofEncodeBuff ) return i;
-		m_pEncodeBuff[m_pOutPosition++] = (unsigned char )( tmpCode & 0x01 );
-		tmpCode >>= 1;
+		m_pEncodeBuff[m_pOutPosition++] = (unsigned char )( (stringCode >> (m_DicCodeBit - i - 1)) & 0x01 );
 	}
 	return m_DicCodeBit;
 }
@@ -748,16 +749,10 @@ int CMLZ::inputCode(
 	int *stringCode,
 	int len
 ){
-	int i;
-	int tmpCode;
 	unsigned int data;
 
-	tmpCode = 0;
-	for ( i = 0; i < len; i++ ) {
-		pBitIO->ReadBits(&data, 1);
-		tmpCode += ( data << i );
-	}
-	*stringCode = tmpCode;
+	pBitIO->ReadBits(&data, len);
+	*stringCode = (int)data;
 	return len;
 }
 

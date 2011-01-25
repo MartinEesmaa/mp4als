@@ -61,6 +61,13 @@ Contents : MPEG-4 Audio reader and writer
  *   - modified CMp4aReader::Open() to set m_OrgFileType to 0xff,
  *     when oafi box is not present.
  *
+ * 2009/09/04, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - added support for reading/writing the audio profile
+ *     indicator
+ *
+ * 2009/12/24, Koichi Sugiura <koichi.sugiura@ntt-at.co.jp>
+ *   - debugged memory leak in CMp4aReader::Open().
+ *
  ******************************************************************/
 
 #include	<vector>
@@ -91,6 +98,7 @@ CMp4aReader::CMp4aReader( void )
 	m_HeaderSize = m_TrailerSize = m_AuxDataSize = 0;
 	m_OrgFileType = 0;
 	m_LastError = E_NONE;
+	m_audioProfileLevelIndication = 0xfe; // No OD profile specified
 }
 
 ////////////////////////////////////////
@@ -188,6 +196,13 @@ bool	CMp4aReader::Open( CBaseStream& Stream )
 			}
 		}
 		if ( iSampleEntry == pStsd->m_Entries.end() ) throw E_MP4A_SAMPLE_ENTRY;	// No mp4a found.
+
+		// Search iods
+		pBox = NULL;
+		if ( pMoov->FindBox( IMF_FOURCC_IODS, pBox ) ) {
+			CObjectDescriptorBox * pOds = reinterpret_cast<CObjectDescriptorBox*>( pBox );
+			m_audioProfileLevelIndication = pOds->m_OD.m_audioProfileLevelIndication;
+		}
 
 		// Search stco box.
 		pBox = NULL;
@@ -373,6 +388,7 @@ bool	CMp4aReader::Open( CBaseStream& Stream )
 	}
 
 	if ( pMoov ) delete pMoov;
+	if ( pMeta ) delete pMeta;
 	return Result;
 }
 
@@ -485,6 +501,7 @@ CMp4aWriter::CMp4aWriter( void )
 	m_HeaderSize = m_TrailerSize = m_AuxDataSize = 0;
 	m_HeaderOffset = m_TrailerOffset = m_AuxDataOffset = 0;
 	m_LastError = E_NONE;
+	m_audioProfileLevelIndication = 0xfe; // No OD profile specified.
 }
 
 ////////////////////////////////////////
@@ -917,7 +934,7 @@ CBox*	CMp4aWriter::CreateIods( void )
 		p->m_OD.m_includeInlineProfileLevelFlag = false;
 		p->m_OD.m_ODProfileLevelIndication = 0xff;			// No OD capability required.
 		p->m_OD.m_sceneProfileLevelIndication = 0xff;		// No OD capability required.
-		p->m_OD.m_audioProfileLevelIndication = 0xfe;		// No OD profile specified.
+		p->m_OD.m_audioProfileLevelIndication = m_audioProfileLevelIndication;
 		p->m_OD.m_visualProfileLevelIndication = 0xff;		// No OD capability required.
 		p->m_OD.m_graphicsProfileLevelIndication = 0xff;	// No OD capability required.
 		CES_ID_Inc*	pDescr = new CES_ID_Inc();

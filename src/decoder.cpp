@@ -146,12 +146,33 @@ contents : Implementation of the CLpacDecoder class
  *   - rewritten the formula for calculating the bit-width of the prediction
  *     order using integer operations (instead of floating-point).
  *
+ * 09/04/2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - added support for ALS profile conformance checking
+ *
+ * 11/16/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - fixed rounding bug when channel sorting is enabled
+ *
+ * 12/28/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - aligned NeedTdBit calculation with the ALS specification
+ *   - fixed progressive coding of the residual for short frames
+ *   - use IntRes consistently in the integer decoder
+ *
+ * 02/03/2010, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - generate the difference signal lazily
+ *   - do not assume c % 2 == 0 when block length switching is
+ *     used together with joint stereo
+ *
+ * 01/25/2011, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - fixed an integer overflow in DecodeBlockReconstructRLSLMS()
+ *     for frame lenths >= 32768
+ *
  ************************************************************************/
 
 #include <stdio.h>
 #include <memory.h>
 #include <math.h>
 #include <assert.h>
+#include <limits.h>
 
 #if defined(WIN32) || defined(WIN64)
 	#include <io.h>
@@ -177,7 +198,7 @@ int ilog2_ceil(unsigned int x) {
 	if (x == 0) return -1;
 
 	int l = 0;
-	while ((l < sizeof(x)*8) && ((1u << l) < x)) ++l;
+	while ((l < sizeof(x)*CHAR_BIT) && ((1u << l) < x)) ++l;
 	return l;
 }
 
@@ -196,6 +217,7 @@ CLpacDecoder::CLpacDecoder()
 	CloseInput = CloseOutput = false;
 	ChanSort = 0;
 	mp4file = false;
+	ALSProfFillSet(ConformantProfiles);
 }
 
 CLpacDecoder::~CLpacDecoder()
@@ -222,14 +244,6 @@ CLpacDecoder::~CLpacDecoder()
 		}
 
 		delete [] tmpbuf;
-
-		if (Joint)
-		{
-			for (i = 0; i < Chan/2; i++)
-				delete [] xps[i];
-			delete [] xps;
-			delete [] xs;
-		}
 
 		delete [] bbuf;
 		delete [] d;
@@ -346,7 +360,7 @@ short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo, const M
 		NeedPuchBit = 0;
 		while(i) {i /= 2; NeedPuchBit++;}
 
-		long size = (NeedPuchBit*Chan)/8+1;
+		long size = (NeedPuchBit*Chan+7)/8;
 		unsigned char* buff = new unsigned char[size];
 		fread(buff, 1, size, fpInput);
 		in.InitBitRead(buff);
@@ -389,6 +403,9 @@ short CLpacDecoder::AnalyseInputFile(AUDIOINFO *ainfo, ENCINFO *encinfo, const M
 	encinfo->PITCH = PITCH;
 	encinfo->RAflag = RAflag;
 	encinfo->CRCenabled = CRCenabled;
+	encinfo->RLSLMS = RLSLMS;
+
+	CheckAlsProfiles_Header(ConformantProfiles, ainfo, encinfo);
 
 	return(0);
 }
@@ -465,9 +482,9 @@ ALS_INT64 CLpacDecoder::WriteHeader( const MP4INFO& Mp4Info )
 	}
 	
 	// following buffer size is enough if only forward predictor is used.
-	//	tmpbuf = new unsigned char[((long)((Res+7)/8)+1)*N + (4*P + 128)*(1+(1<<Sub))];
+	//	tmpbuf = new unsigned char[((long)((IntRes+7)/8)+1)*N + (4*P + 128)*(1+(1<<Sub))];
 	// for RLS-LMS
-	tmpbuf = new unsigned char[long(Res/8+10)*N + MAXODR * 4];
+	tmpbuf = new unsigned char[long(IntRes/8+10)*N + MAXODR * 4];
 
 	if (RLSLMS)
 	{
@@ -483,30 +500,17 @@ ALS_INT64 CLpacDecoder::WriteHeader( const MP4INFO& Mp4Info )
 		}
 	}
 
-	if (Joint)
-	{
-		xps = new int*[Chan/2];
-		xs = new int*[Chan/2];
-
-		for (i = 0; i < Chan/2; i++)
-		{
-			xps[i] = new int[N+P];
-			xs[i] = xps[i] + P;
-			memset(xps[i], 0, sizeof(int)*P);
-		}
-	}
-
 	// following buffer size is enough if only forward predictor is used.
-	//	bbuf = new unsigned char[(((long)((Res+7)/8)+1)*N + (4*P + 128)*(1+(1<<Sub))) * Chan];	// Input buffer
+	//	bbuf = new unsigned char[(((long)((IntRes+7)/8)+1)*N + (4*P + 128)*(1+(1<<Sub))) * Chan];	// Input buffer
 	// for RLS-LMS
-	bbuf = new unsigned char[long(Res/8+10)*Chan*N];	// Input buffer
+	bbuf = new unsigned char[long(IntRes/8+10)*Chan*N];	// Input buffer
 
 	// Allocate float buffer
 	if ( SampleType == SAMPLE_TYPE_FLOAT ) Float.AllocateBuffer( Chan, N, IntRes );
 	// Allocate MCC buffer
-	if (Freq > 96000L)
+	if (Freq >= 192000L)
 		NeedTdBit = 7;
-	else if (Freq > 48000L)
+	else if (Freq >= 96000L)
 		NeedTdBit = 6;
 	else
 		NeedTdBit = 5;
@@ -578,7 +582,7 @@ unsigned int CLpacDecoder::GetCRC()
 
 /*short CLpacDecoder::GetFrameSize()
 {
-	return(N * Chan * (Res / 8));
+	return(N * Chan * (IntRes / 8));
 }
 
 long CLpacDecoder::GetOrgFileSize()
@@ -649,15 +653,14 @@ short CLpacDecoder::DecodeFrame()
 {
 	short RAframe;
 	BYTE h1;
-	long c, c1, c2, b, B, oaa;
+	long c, c1, b, B, oaa;
 	long i, Nb[32], NN, Nsum, mtp;
 	UINT BSflags;
 	short CBS;
 	BYTE h, typ, flag;
 
-	int **xsave, **xssave, **xtmp;
+	int **xsave, **xtmp;
 	xsave = new int*[Chan];
-	xssave = new int*[(long)(Chan/2)];
 	xtmp = new int*[Chan];
 	
 	fid++;						// Number of current frame
@@ -696,16 +699,10 @@ short CLpacDecoder::DecodeFrame()
 		for (c = 0; c < Chan; c++)
 			xsave[c] = x[c];
 
-		if (Joint)
-		{
-			for (c = 0; c < Chan/2; c++)
-				xssave[c] = xs[c];
-		}
-
 		// Channels ///////////////////////////////////////////////////////////////////////////////////
 		for (c = 0; c < Chan; c++)
 		{
-			CBS = (Joint && (c < Chan - 1) && (c % 2 == 0));	// Joint coding, and not the last channel
+			CBS = (Joint && (c < Chan - 1) && (c % 2 == 0 || Sub));	// Joint coding, and not the last channel
 
 			if (Sub)	// block switching enabled
 			{
@@ -753,7 +750,6 @@ short CLpacDecoder::DecodeFrame()
 			if (CBS)	// Decode two coupled channels
 			{
 				c1 = c + 1;		// index of second channel
-				c2 = c >> 1;	// index of difference channel
 
 				for (b = 0; b < B; b++)
 				{
@@ -765,11 +761,24 @@ short CLpacDecoder::DecodeFrame()
 
 					if ((typ == 0x03) || ((typ < 0x02) && flag))	// Channel 1 = difference signal
 					{
-						DecodeBlock(xs[c2], Nb[b], RAframe && (b == 0));
+						if (!(RAframe && (b == 0))) {
+							/* Prepare P samples from the previous block */
+							for (i = -P; i < 0; i++)
+								x[c][i] = x[c1][i] - x[c][i];
+						}
+
+						DecodeBlock(x[c],  Nb[b], RAframe && (b == 0));
 						DecodeBlock(x[c1], Nb[b], RAframe && (b == 0));
 
+						if (!(RAframe && (b == 0))) {
+							/* Restore P samples from the previous block */
+							for (i = -P; i < 0; i++)
+								x[c][i] = x[c1][i] - x[c][i];
+						}
+
+						/* Restore signal from difference */
 						for (i = 0; i < Nb[b]; i++)
-							x[c][i] = x[c1][i] - xs[c2][i];
+							x[c][i] = x[c1][i] - x[c][i];
 					}
 					else											// Channel 1 = normal signal
 					{
@@ -782,18 +791,26 @@ short CLpacDecoder::DecodeFrame()
 
 						if ((typ == 0x03) || ((typ < 0x02) && flag))	// Channel 2 = difference signal
 						{
-							DecodeBlock(xs[c2], Nb[b], RAframe && (b == 0));
+							if (!(RAframe && (b == 0))) {
+								/* Prepare P samples from the previous block */
+								for (i = -P; i < 0; i++)
+									x[c1][i] -= x[c][i];
+							}
+							DecodeBlock(x[c1], Nb[b], RAframe && (b == 0));
 
+							if (!(RAframe && (b == 0))) {
+								/* Restore P samples from the previous block */
+								for (i = -P; i < 0; i++)
+									x[c1][i] += x[c][i];
+							}
+
+							/* Restore signal from difference */
 							for (i = 0; i < Nb[b]; i++)
-								x[c1][i] = x[c][i] + xs[c2][i];
+								x[c1][i] += x[c][i];
 						}
 						else											// Channel 2 = normal signal
 						{
 							DecodeBlock(x[c1], Nb[b], RAframe && (b == 0));
-
-							// Generate values for xs
-							for (i = 0; i < Nb[b]; i++)
-								xs[c2][i] = x[c1][i] - x[c][i];
 						}
 					}
 					// Increment pointers (except for last subblock)
@@ -801,8 +818,6 @@ short CLpacDecoder::DecodeFrame()
 					{
 						x[c] = x[c] + Nb[b];
 						x[c1] = x[c1] + Nb[b];
-						if (Joint)
-							xs[c2] = xs[c2] + Nb[b];
 					}
 				}
 				// increment channel index
@@ -818,15 +833,6 @@ short CLpacDecoder::DecodeFrame()
 					if (b < B - 1)
 						x[c] = x[c] + Nb[b];
 				}
-				// Generate difference signal for subsequent frame
-				if (Joint && (c % 2))	// c = 1, 3, 5, ...
-				{
-					c1 = c - 1;
-					c2 = c1 >> 1;
-					// Generate values for xs
-					for (i = 0; i < N; i++)
-						xs[c2][i] = xsave[c][i] - xsave[c1][i];
-				}
 			}
 		}
 		// End of Channels ////////////////////////////////////////////////////////////////////////////
@@ -836,11 +842,6 @@ short CLpacDecoder::DecodeFrame()
 			
 			x[c] = xsave[c];
 			//if (fid == frames) fprintf(stderr,"%d=%d\n",c,x[c][0]);
-		}
-		if (Joint)
-		{
-			for (c = 0; c < Chan/2; c++)
-				xs[c] = xssave[c];
 		}
 
 		
@@ -915,11 +916,6 @@ short CLpacDecoder::DecodeFrame()
 		// Save original pointers
 		for (c = 0; c < Chan; c++)
 			xsave[c] = x[c];
-		if (Joint)
-		{
-			for (c = 0; c < Chan/2; c++)
-				xssave[c] = xs[c];
-		}
 
 		if (Sub)	// block switching enabled
 		{
@@ -984,28 +980,12 @@ short CLpacDecoder::DecodeFrame()
 				// Increment pointers (except for last subblock)
 				if (b < B - 1)
 					x[c] = x[c] + Nb[b];
-
-				if (Joint && (c % 2))	// c = 1, 3, 5, ...
-				{
-					c1 = c - 1;
-					c2 = c1 >> 1;
-					// Generate values for xs
-					for (i = 0; i < N; i++)
-						xs[c2][i] = xsave[c][i] - xsave[c1][i];
-				}
 			}
 		}
 
 		// Restore original pointers
 		for (c = 0; c < Chan; c++)
 			x[c] = xsave[c];
-
-		if (Joint)
-		{
-			for (c = 0; c < Chan/2; c++)
-				xs[c] = xssave[c];
-		}
-
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1015,11 +995,6 @@ short CLpacDecoder::DecodeFrame()
 	// Copy last P samples of each frame in front of it
 	for (c = 0; c < Chan; c++)
 		memcpy(x[c] - P, x[c] + (N - P), P * sizeof(int));
-	if (Joint)
-	{
-		for (c = 0; c < Chan/2; c++)
-			memcpy(xs[c] - P, xs[c] + (N - P), P * sizeof(int));
-	}
 
 	// Write PCM audio data
 	if ( SampleType == SAMPLE_TYPE_INT )
@@ -1083,7 +1058,6 @@ short CLpacDecoder::DecodeFrame()
 	}
 
 	delete [] xsave;
-	delete [] xssave;
 	delete [] xtmp;
 
 	return(0);
@@ -1204,9 +1178,9 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 	{
 		fseek(fpInput, -1, SEEK_CUR);	// Go back one byte which was already read
 		// following buffer size is enough if only forward predictor is used.
-		//		count = fread(tmpbuf, 1, (((long)((Res+7)/8)+1)*Nb + 4*P + 128), fpInput);   // Fill input buffer
+		//		count = fread(tmpbuf, 1, (((long)((IntRes+7)/8)+1)*Nb + 4*P + 128), fpInput);   // Fill input buffer
         // for RLS-LMS
-		count = fread(tmpbuf, 1, long(Res/8+10) * Nb + P + 16 + 255*4, fpInput);   // Fill input buffer
+		count = fread(tmpbuf, 1, long(IntRes/8+10) * Nb + P + 16 + 255*4, fpInput);   // Fill input buffer
 
         in.InitBitRead(tmpbuf);
 		
@@ -1245,7 +1219,7 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 		// Code parameters for EC blocks
 		if (!BGMC)
 		{
-			short sbits = Res <= 16 ? 4 : 5;
+			short sbits = IntRes <= 16 ? 4 : 5;
 			in.ReadBits(&u, sbits);
 			s[0] = u;
 			for (i = 1; i < sub; i++)
@@ -1256,7 +1230,7 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 		}
 		else
 		{
-			short sbits = Res <= 16 ? 8 : 9;
+			short sbits = IntRes <= 16 ? 8 : 9;
 			UINT S[16];
 			in.ReadBits(&S[0], sbits);
 			for (i = 1; i < sub; i++)
@@ -1335,17 +1309,17 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 		}
 		else		// Random access
 		{
-			// Progressive prediction: Separate entropy coding of the first 3 samples
-			short RiceLimit = ( Res <= 16 ) ? 15 : 31;
-			if (optP > 0)
-				in.ReadRice(d, Res-4, 1);
-			if (optP > 1)
-				in.ReadRice(d+1, min(s[0]+3, RiceLimit), 1);
-			if (optP > 2)
-				in.ReadRice(d+2, min(s[0]+1, RiceLimit), 1);
-
 			// Number of separately coded samples
-			short num = optP < 3 ? optP : 3;
+			short num = min(optP, min(Nb, 3));
+
+			// Progressive prediction: Separate entropy coding of the first 3 samples
+			short RiceLimit = ( IntRes <= 16 ) ? 15 : 31;
+			if (num > 0)
+				in.ReadRice(d, IntRes-4, 1);
+			if (num > 1)
+				in.ReadRice(d+1, min(s[0]+3, RiceLimit), 1);
+			if (num > 2)
+				in.ReadRice(d+2, min(s[0]+1, RiceLimit), 1);
 
 	        if (!BGMC)
 			{
@@ -1487,6 +1461,7 @@ void CLpacDecoder::DecodeBlockParameter(MCC_DEC_BUFFER *pBuffer, long Channel, l
 						mtgmm[oaa][i] += 16;
 			}
 		}
+		CheckAlsProfiles_MCCStages(ConformantProfiles, oaa);
 		bytes = in.EndBitRead();					// Number of bytes read
 		fseek(fpInput, bytes - count, SEEK_CUR);	// Set working pointer to current position
 	}
@@ -1563,7 +1538,7 @@ short CLpacDecoder::DecodeBlockReconstructRLSLMS(MCC_DEC_BUFFER *pBuffer, long C
 	short optP = pBuffer->m_optP[Channel];
 	short xpara = pBuffer->m_xpara[Channel];
 
-	short i;
+	long i;
 
 	if(xpara == 1)
 		memset(x, 0, sizeof(int) * N);

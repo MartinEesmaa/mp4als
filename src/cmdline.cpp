@@ -55,6 +55,9 @@ contents : Command line parsing
  * 11/28/2008, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
  *   - added the "const" keyword to fix some compiler warnings
  *
+ * 09/04/2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - ignore numeric options having invalid format
+ *
  *************************************************************************/
 
 #include <string.h>
@@ -87,15 +90,16 @@ long GetOptionValue(short argc, char **argv, const char *opt, long default_value
 	short i;
 	size_t	OptLen = strlen( opt );
 
-	i = 1;
-	do
-	{
-		if (!strncmp(argv[i], opt, OptLen))
-			return(atol(argv[i] + OptLen));
-		else
-			i++;
-	} 
-	while (i < argc);
+	for (i=1; i<argc; ++i) {
+		if (!strncmp(argv[i], opt, OptLen)) {
+			long val;
+			if (sscanf(argv[i] + OptLen, "%ld", &val) == 1) {
+				// Return the value
+				return val;
+			}
+			// Ignore if not in "-a#" format
+		}
+	}
 	return(default_value);
 }
 

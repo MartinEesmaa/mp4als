@@ -38,8 +38,10 @@ contents : Header file for lms.h
  *
  * Modifications:
  *
+ * Dec 25, 2009 - Do not use the const block coding tool when the constant
+ *                value cannot be represented on IntRes bits
  *
- *   
+ * Jan 25, 2011 - Fix integer overflows for frame lengths >= 32768
  *
  *************************************************************************/
 #include "mcc.h"
@@ -97,16 +99,16 @@ struct rlslms_buf_ptr {
     short channel; // which channel is currently processing		
 };
 
-void analyze(int *x, short N,  rlslms_buf_ptr *rlslms_ptr, short RA, MCC_ENC_BUFFER *mccbuf);
-void synthesize(int *x, short N,  rlslms_buf_ptr *rlslms_ptr, short RA, MCC_DEC_BUFFER *mccbuf);
-void analyze_joint(int *x0, int *x1, short N,  rlslms_buf_ptr *rlslms_ptr, short RA, short *mono, MCC_ENC_BUFFER *mccbuf);
-void synthesize_joint(int *x0, int *x1, short N, rlslms_buf_ptr *rlslms_ptr, short RA, short mono, MCC_DEC_BUFFER *mccbuf);
+void analyze(int *x, long N,  rlslms_buf_ptr *rlslms_ptr, short RA, short IntRes, MCC_ENC_BUFFER *mccbuf);
+void synthesize(int *x, long N,  rlslms_buf_ptr *rlslms_ptr, short RA, MCC_DEC_BUFFER *mccbuf);
+void analyze_joint(int *x0, int *x1, long N,  rlslms_buf_ptr *rlslms_ptr, short RA, short IntRes, short *mono, MCC_ENC_BUFFER *mccbuf);
+void synthesize_joint(int *x0, int *x1, long N, rlslms_buf_ptr *rlslms_ptr, short RA, short mono, MCC_DEC_BUFFER *mccbuf);
 void predict_init(rlslms_buf_ptr *ptr);
 void initCoefTable(short mode, unsigned char CoefTable);
 
 
 extern short BlockIsZero(int *x, long N);
-extern int BlockIsConstant(int *x, long N);
+extern int BlockIsConstant(int *x, long N, short IntRes);
 extern short ShiftOutEmptyLSBs(int *x, long N);
 extern short lookup_mu(short mu);
 extern short lookup_table(short *,short mu);

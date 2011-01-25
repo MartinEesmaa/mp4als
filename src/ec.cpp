@@ -42,6 +42,10 @@ contents : Estimation of entropy codes
  * 12/14/2003, Koichi Sugiura <ksugiura@mitaka.ntt-at.co.jp>
  *   - added #include <cstdlib>.
  *
+ * 12/25/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - added parameter "start" to GetRicePara()
+ *   - modified GetRicePara() to take into account progressive coding
+ *
  *************************************************************************/
 
 #include <math.h>
@@ -50,16 +54,26 @@ contents : Estimation of entropy codes
 #define LN2 0.69314718055994529
 
 // Calculate code parameter for Rice coding (returns s >= 0)
-short GetRicePara(int *x, long N, short *sx)
+short GetRicePara(int *x, short start, long N, short *sx)
 {
 	short s;
 	long n;
 	double mean;
 
 	mean = 0.0;
-	for (n = 0; n < N; n++)
-		mean += labs(x[n]);
-	mean /= N;
+	if (start > 1)
+		mean += ((unsigned int)labs(x[1])) >> 3;
+	if (start > 2)
+		mean += ((unsigned int)labs(x[2])) >> 1;
+
+	for (n = start; n < N; n++)
+		mean += (unsigned int)labs(x[n]);
+
+	if (start > 0)
+		--N;
+
+	if (N > 0)
+		mean /= N;
 
 #if 0
     /* Tilman's code: */

@@ -115,6 +115,10 @@ contents : Conversion of plain ALS files to MP4 files
  *  - debugged Mp4ToAls() to detect original file type when oafi box is 
  *    not present.
  *
+ * Sep 4, 2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *  - updated version number to "0.97".
+ *  - added support for reading/writing the audio profile level.
+ *
  ************************************************************************/
 
 #include "ImfFileStream.h"
@@ -128,7 +132,7 @@ contents : Conversion of plain ALS files to MP4 files
 #include	<sys/timeb.h>
 #endif
 
-#define	ALS2MP4_VERSION		"0.96"		// Version number
+#define	ALS2MP4_VERSION		"0.97"		// Version number
 
 #define	READ_UINT( x )		( ( (unsigned int)(x)[0] << 24 ) | ( (unsigned int)(x)[1] << 16 ) | ( (unsigned int)(x)[2] << 8 ) | ( (unsigned int)(x)[3] ) )
 #define	READ_USHORT( x )	( ( (unsigned short)(x)[0] << 8 ) | ( (unsigned short)(x)[1] ) )
@@ -178,6 +182,7 @@ int main(int argc, char **argv)
 	Mp4Info.m_FileType = 0xff;				// File type is determined by ALS header.
 	Mp4Info.m_RMflag = false;
 	Mp4Info.m_UseMeta = ( CheckOption( argc, argv, "-OAFI" ) != 0 );
+	Mp4Info.m_audioProfileLevelIndication = MP4_AUDIO_PROFILE_UNSPECIFIED;
 
 	ErrCode = CheckOption( argc, argv, "-x" ) ? Mp4ToAls( Mp4Info ) : AlsToMp4( Mp4Info );
 	if ( ErrCode != A2MERR_NONE ) {
@@ -227,6 +232,7 @@ A2MERR	AlsToMp4( MP4INFO& Mp4Info )
 		if ( !OutFile.Open( Mp4Info.m_pOutFile ) ) throw A2MERR_CREATE_FILE;
 
 		// Open MP4 writer.
+		Writer.SetAudioProfileLevelIndication( Mp4Info.m_audioProfileLevelIndication );
 		Use64bit = ( Mp4Info.m_HeaderSize + Mp4Info.m_TrailerSize + AlsHeader.m_FileSize > 0xffffffff );
 		if ( !Writer.Open( OutFile, AlsHeader.m_Freq, AlsHeader.m_Chan, AlsHeader.m_Res, Mp4Info.m_FileType, AlsHeader.m_pALSSpecificConfig, AlsHeader.m_ALSSpecificConfigSize, Use64bit, Mp4Info.m_UseMeta ) ) throw A2MERR_INIT_MP4WRITER;
 
@@ -595,6 +601,8 @@ A2MERR	Mp4ToAls( MP4INFO& Mp4Info )
 	// Initialize ALS_HEADER structure.
 	memset( &AlsHeader, 0, sizeof(AlsHeader) );
 
+	Mp4Info.m_audioProfileLevelIndication = MP4_AUDIO_PROFILE_UNSPECIFIED;
+
 	try {
 		// Open MP4 file.
 		if ( !InFile.Open( Mp4Info.m_pInFile ) ) throw A2MERR_OPEN_FILE;
@@ -610,6 +618,8 @@ A2MERR	Mp4ToAls( MP4INFO& Mp4Info )
 		Aot = pConfigData[0] >> 3;																	// XXXX Xxxx
 		if ( Aot == 0x1F ) Aot = 32 + ( ( pConfigData[0] & 0x07 ) << 3 ) | ( pConfigData[1] >> 5 );	// xxx- ----
 		if ( Aot != 36 ) throw A2MERR_NOT_ALS;
+
+		Mp4Info.m_audioProfileLevelIndication = Reader.GetAudioProfileLevelIndication();
 
 		// Calculate total number of samples.
 		TotalSamples = 0;

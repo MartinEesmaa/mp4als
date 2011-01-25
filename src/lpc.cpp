@@ -49,6 +49,11 @@ contents : Linear prediction and related functions
  * 07/04/2005, Tilman Liebchen <liebchen@nue.tu-berlin.de>
  *   - fixed bug in BlockIsZero()
  *
+ * 12/25/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - introduced the IntRes parameter to BlockIsConstant()
+ *   - BlockIsConstant() now returns 0 if the constant value cannot
+ *     be represented on IntRes bits
+ *
  *************************************************************************/
 
 #if defined(WIN32) || defined(WIN64)
@@ -411,16 +416,14 @@ short BlockIsZero(int *x, long N)
 }
 
 // Check if als samples have the same value
-int BlockIsConstant(int *x, long N)
+int BlockIsConstant(int *x, long N, short IntRes)
 {
 	int *x1, c, n;
 
-	if (N == 1)
-		return(x[0]);
-	else
+	c = *x;
+	if (N > 1)
 	{
 		x1 = x + 1;
-		c = *x;
 		n = 0;
 		do
 		{
@@ -431,7 +434,11 @@ int BlockIsConstant(int *x, long N)
 		}
 		while (c && (n < (N-1)));
 	}
-	
+
+	// Check if "c" can be represented on "IntRes" bits
+	int shift = sizeof(c) * CHAR_BIT - IntRes;
+	if (((c << shift) >> shift) != c) c = 0;
+
 	return(c);
 }
 

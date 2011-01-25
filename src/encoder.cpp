@@ -209,6 +209,31 @@ contents : Implementation of the CLpacEncoder class
  *     order using integer operations (instead of floating-point).
  *   - fixed some printf format strings
  *
+ * 09/04/2009, Csaba Kos <csaba.kos@ex.ssh.ntt-at.co.jp>
+ *   - added support for enforcing profile levels
+ *   - added support for checking conformant profile levels
+ *
+ * 12/07/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - clip CoefTable to 3 for higher sampling rates instead of
+ *     wrapping-around
+ *   - add missing direct coding of coefficients when CoefTable is 3
+ *
+ * 12/25/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - do not use the const block coding tool when the constant value
+ *     cannot be represented on IntRes bits
+ *
+ * 12/28/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - aligned NeedTdBit calculation with the ALS specification
+ *   - fixed progressive coding of the residual for short frames
+ *   - use IntRes consistently in the integer encoder
+ *
+ * 02/03/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - correctly set independent_bs=1 in bs_info for the second channel
+ *     of independently coded channel pairs
+ *
+ * 02/04/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - do not allow shorter block length than the fixed prediction order
+ *
  ************************************************************************/
 
 #include <stdio.h>
@@ -217,6 +242,7 @@ contents : Implementation of the CLpacEncoder class
 #include <time.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <limits.h>
 
 #if defined(WIN32) || defined(WIN64)
 	#include <io.h>
@@ -247,7 +273,7 @@ int ilog2_ceil(unsigned int x) {
 	if (x == 0) return -1;
 
 	int l = 0;
-	while ((l < sizeof(x)*8) && ((1u << l) < x)) ++l;
+	while ((l < sizeof(x)*CHAR_BIT) && ((1u << l) < x)) ++l;
 	return l;
 }
 
@@ -296,6 +322,9 @@ CLpacEncoder::CLpacEncoder()
 	frames = 0;
 	mp4file = false;
 	oafi_flag = false;
+
+	ALSProfFillSet( ConformantProfiles );
+	ALSProfEmptySet( EnforcedProfiles );
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -451,7 +480,7 @@ short CLpacEncoder::AnalyseInputFile(AUDIOINFO *ainfo)
 			// Integer PCM
 			SampleType = 0;
 			IntRes = Res;
-		} else if ( wf.FormatTag == 3 ) {		//WAVE_FORMAT_IEEE_FLOAT
+		} else if ( wf.FormatTag == 3 && Res == 32 ) {		//WAVE_FORMAT_IEEE_FLOAT
 			// Floating point PCM
 			SampleType = 1;
 			IntRes = IEEE754_PCM_RESOLUTION;
@@ -471,6 +500,8 @@ short CLpacEncoder::AnalyseInputFile(AUDIOINFO *ainfo)
 	}
 	else	// FileType == 0
 	{
+		if (SampleType == 1) /* Force 32-bit resolution */
+			Res = 32;        /* for floating point      */
 		if ((FileLen - HeaderSize) % (Chan * (Res / 8)))
 			return(-1);
 		Samples = (FileLen - HeaderSize) / (Chan * (Res / 8));
@@ -529,6 +560,9 @@ short CLpacEncoder::AnalyseInputFile(AUDIOINFO *ainfo)
 	ainfo->HeaderSize = HeaderSize;
 	ainfo->TrailerSize = TrailerSize;
 
+	if (!EnforceProfiles())
+		return -1;
+
 	return(0);
 };
 
@@ -546,6 +580,9 @@ short CLpacEncoder::SpecifyAudioInfo(AUDIOINFO *ainfo)
 	Freq = ainfo->Freq;
 	HeaderSize = ainfo->HeaderSize;
 	TrailerSize = ainfo->TrailerSize;
+
+	if (!EnforceProfiles())
+		return -1;
 
 	return(0);
 };
@@ -566,6 +603,10 @@ ALS_INT64 CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 #ifndef	LPC_ADAPT
 	Adapt = 0;
 #endif
+
+	// Enfore profiles for all parameters that are finalized
+	if (!EnforceProfiles())
+		return -1;
 
 	if (P == 0)
 		Adapt = 0;			// force fixed order
@@ -610,6 +651,14 @@ ALS_INT64 CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 		N *= (1<<(Sub/2));		// Sub=0/1:N, Sub=2/3:2N, Sub=4/5:4N
 	}
 	Q = 20;		// Quantizer value (for conversion of coefficients)
+
+	// Enfore profiles for possibly calculated parameters (frame length, etc.)
+	if (!EnforceProfiles())
+		return -1;
+
+	// If fixed prediction is used, P <= N must be true
+	if (!Adapt && P > N)
+		return -1;
 
 	// Number of frames
 	frames = Samples / N;
@@ -670,10 +719,10 @@ ALS_INT64 CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	}
 
 	// following buffer size is enough if only forward predictor is used.
-	// //(long)((Res+7)/8) = ceil(Res/8)
-	//	long BufSize = ((long)((Res+7)/8)+1)*N + (4*P + 128)*(1+(1<<Sub));
+	// //(long)((IntRes+7)/8) = ceil(IntRes/8)
+	//	long BufSize = ((long)((IntRes+7)/8)+1)*N + (4*P + 128)*(1+(1<<Sub));
 	// for RLS-LMS
-	long BufSize = long(Res/8+10)*N*2;
+	long BufSize = long(IntRes/8+10)*N*2;
 
 	tmpbuf1 = new unsigned char[BufSize];				// Buffer for one channel
 
@@ -703,9 +752,9 @@ ALS_INT64 CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	if ( SampleType == SAMPLE_TYPE_FLOAT ) Float.AllocateBuffer( Chan, N, IntRes );
 	
 	// Allocate MCC buffer
-	if (Freq > 96000L)
+	if (Freq >= 192000L)
 		NeedTdBit = 7;
-	else if (Freq > 48000L)
+	else if (Freq >= 96000L)
 		NeedTdBit = 6;
 	else
 		NeedTdBit = 5;
@@ -768,7 +817,7 @@ ALS_INT64 CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	if ( MSBfirst ) audiotyp += 1;		// xxxx xxx1
 
 	// Select entropy coding table for coefficients via sampling rate, other criteria possible
-	CoefTable = ((Freq / 48000L) >> 1) & 0x03;				// 44k/48k->00, 96k->01, 192k->10
+	CoefTable = min((Freq / 48000L) >> 1, 0x03);				// 44k/48k->00, 96k->01, 192k->10, 288k or higher->11
 
 	if (RLSLMS)
 	{
@@ -882,6 +931,33 @@ ALS_INT64 CLpacEncoder::WriteHeader(ENCINFO *encinfo)
 	}
 
 	// End of header information //////////////////////////////////////////////////////////////////
+
+	AUDIOINFO ainfo;
+	ainfo.Chan = Chan;
+	ainfo.FileType = FileType;
+	ainfo.MSBfirst = MSBfirst;
+	ainfo.Res = Res;
+	ainfo.IntRes = IntRes;
+	ainfo.SampleType = SampleType;
+	ainfo.Samples = Samples;
+	ainfo.Freq = Freq;
+	ainfo.HeaderSize = HeaderSize;
+	ainfo.TrailerSize = TrailerSize;
+
+	encinfo->FrameLength = N;
+	encinfo->AdaptOrder = Adapt;
+	encinfo->JointCoding = Joint;
+	encinfo->SubBlocks = Sub;
+	encinfo->RandomAccess = RA;
+	encinfo->BGMC = BGMC;
+	encinfo->MaxOrder = P;
+	encinfo->MCC = MCC;
+	encinfo->PITCH = PITCH;
+	encinfo->RLSLMS = RLSLMS;
+	encinfo->RAflag = RAflag;
+	encinfo->CRCenabled = CRCenabled;
+
+	CheckAlsProfiles_Header( ConformantProfiles, &ainfo, encinfo );
 
 	return(frames);
 };
@@ -1210,6 +1286,11 @@ short CLpacEncoder::EncodeFrame()
 	
 	// Block switching level
 	Bsub = Sub;
+	if ( !Adapt ) {
+		// Decrease the block switching level to satisfy: P <= (N >> Bsub)
+		while ( P > (N >> Bsub) ) --Bsub;
+	}
+
 	NN = N;						// Original frame length (N might be changed below)
 
 	// Set length of last frame
@@ -1311,8 +1392,8 @@ short CLpacEncoder::EncodeFrame()
 			{
 				//bufferi[0][s] = new unsigned char[4L*N];	// Buffer for short frames
 				//bufferi[1][s] = new unsigned char[4L*N];	// Buffer for short frames
-				bufferi[0][s] = new unsigned char[((long)((Res+7)/8)+1)*N + 4*P + 128];	// Buffer for short frames
-				bufferi[1][s] = new unsigned char[((long)((Res+7)/8)+1)*N + 4*P + 128];	// Buffer for short frames
+				bufferi[0][s] = new unsigned char[((long)((IntRes+7)/8)+1)*N + 4*P + 128];	// Buffer for short frames
+				bufferi[1][s] = new unsigned char[((long)((IntRes+7)/8)+1)*N + 4*P + 128];	// Buffer for short frames
 			}
 		}
 
@@ -1488,12 +1569,7 @@ short CLpacEncoder::EncodeFrame()
 			UINT BSflags, BSflagsi[2];
 			unsigned short bshift, B1, Nb1;
 
-			if (Bsub >= 3)
-				BSflags = 0x7FFFFFFF;
-			else if (Bsub == 2)
-				BSflags = 0x70000000;
-			else if (Bsub == 1)
-				BSflags = 0x40000000;
+			BSflags = 0;
 
 			for (a = Bsub; a > 0; a--)		// levels (shortest to longest blocks)
 			{
@@ -1527,19 +1603,20 @@ short CLpacEncoder::EncodeFrame()
 						// copy last block from lower level (a) to upper level (a-1)
 						bits[b] = bpb[a][B1-1];
 						memcpy(buffer[a-1] + tmp_dest, buffer[a] + tmp_src, bpb[a][B1-1]);
+						BSflags |= (0x40000000 >> (bshift + b));			// 01223333 44444444 55555555 55555555
 					}
 					// Compare levels a and a-1
 					else if (bpb[a-1][b] > (tmp = bpb[a][2*b] + bpb[a][2*b+1]))	// two short blocks need less bits
 					{
 						bits[b] = tmp;
 						memcpy(buffer[a-1] + tmp_dest, buffer[a] + tmp_src, tmp);	// copy two short blocks into superior block
+						BSflags |= (0x40000000 >> (bshift + b));			// 01223333 44444444 55555555 55555555
 					}
 					else													// one long block needs less bits
 					{
 						bits[b] = bpb[a-1][b];
 						if (tmp_dest != tmp_org)
 							memmove(buffer[a-1] + tmp_dest, buffer[a-1] + tmp_org, bpb[a-1][b]);
-						BSflags &= ~(0x40000000 >> (bshift + b));			// 01223333 44444444 55555555 55555555
 					}
 					tmp_dest += bits[b];									// increment position in destination buffer
 					tmp_src += tmp;											// increment position in source buffer
@@ -1557,12 +1634,7 @@ short CLpacEncoder::EncodeFrame()
 				short ch;
 				for (ch = 0; ch < 2; ch++)			// channels
 				{
-					if (Bsub >= 3)
-						BSflagsi[ch] = 0x7FFFFFFF;
-					else if (Bsub == 2)
-						BSflagsi[ch] = 0x70000000;
-					else if (Bsub == 1)
-						BSflagsi[ch] = 0x40000000;
+					BSflagsi[ch] = 0;
 
 					for (a = Bsub; a > 0; a--)		// levels
 					{
@@ -1596,19 +1668,20 @@ short CLpacEncoder::EncodeFrame()
 								// copy last block from lower level (a) to upper level (a-1)
 								bitsi[ch][b] = bpbi[ch][a][B1-1];
 								memcpy(bufferi[ch][a-1] + tmp_dest, bufferi[ch][a] + tmp_src, bpbi[ch][a][B1-1]);
+								BSflagsi[ch] |= (0x40000000 >> (bshift + b));			// 01223333 44444444 55555555 55555555
 							}
 							// Compare levels a and a-1
 							else if (bpbi[ch][a-1][b] > (tmp = bpbi[ch][a][2*b] + bpbi[ch][a][2*b+1]))	// two short blocks need less bits
 							{
 								bitsi[ch][b] = tmp;
 								memcpy(bufferi[ch][a-1] + tmp_dest, bufferi[ch][a] + tmp_src, tmp);	// copy two short blocks into superior block
+								BSflagsi[ch] |= (0x40000000 >> (bshift + b));			// 01223333 44444444 55555555 55555555
 							}
 							else
 							{
 								bitsi[ch][b] = bpbi[ch][a-1][b];
 								if (tmp_dest != tmp_org)
 									memmove(bufferi[ch][a-1] + tmp_dest, bufferi[ch][a-1] + tmp_org, bpbi[ch][a-1][b]);
-								BSflagsi[ch] &= ~(0x40000000 >> (bshift + b));			// 01223333 44444444 55555555 55555555
 							}
 							tmp_dest += bitsi[ch][b];									// increment position in destination buffer
 							tmp_src += tmp;											// increment position in source buffer
@@ -1622,17 +1695,17 @@ short CLpacEncoder::EncodeFrame()
 			// end of independent coding check ////////////////////////////////////////////////////////
 
 			// Compose frame data 
-			if (Bsub)
+			if (Sub)
 			{
 				// Use buffer[1] to rearrange data
 				short BSbits = 1;
 				buffer[1][0] = BSflags >> 24;
-				if (Bsub > 3)
+				if (Sub > 3)
 				{
 					BSbits = 2;
 					buffer[1][1] = (BSflags >> 16) & 0xFF;
 				}
-				if (Bsub == 5)
+				if (Sub == 5)
 				{
 					BSbits = 4;
 					buffer[1][2] = (BSflags >> 8) & 0xFF;
@@ -1653,14 +1726,15 @@ short CLpacEncoder::EncodeFrame()
 
 						// set flags for both channels
 						BSflagsi[0] |= 0x80000000;			// set msb to indicate independent block switching
+						BSflagsi[1] |= 0x80000000;			// set msb to indicate independent block switching
 						buffer[1][0] = BSflagsi[0] >> 24;
 						buffer[1][off] = BSflagsi[1] >> 24;
-						if (Bsub > 3)
+						if (Sub > 3)
 						{
 							buffer[1][1] = (BSflagsi[0] >> 16) & 0xFF;
 							buffer[1][off+1] = (BSflagsi[1] >> 16) & 0xFF;
 						}
-						if (Bsub == 5)
+						if (Sub == 5)
 						{
 							buffer[1][2] = (BSflagsi[0] >> 8) & 0xFF;
 							buffer[1][3] = BSflagsi[0] & 0xFF;
@@ -1736,7 +1810,7 @@ short CLpacEncoder::EncodeFrame()
 				{
 					for(i=0;i<N;i++) MccBuf.m_dmat[c0][i]=x[c0][i];		// Save input
 					rlslms_ptr.channel = c0;
-					analyze(x[c0], N, &rlslms_ptr ,RAframe || RESET, &MccBuf);
+					analyze(x[c0], N, &rlslms_ptr ,RAframe || RESET, IntRes, &MccBuf);
 					for(i=0;i<N;i++)									// Restore input
 					{
 						tmp = MccBuf.m_dmat[c0][i];
@@ -1752,7 +1826,7 @@ short CLpacEncoder::EncodeFrame()
 					RLSLMS_ext=0;
 					for(i=0;i<N;i++) MccBuf.m_dmat[c1][i]=x[c1][i];		// Save input
 					rlslms_ptr.channel = c1; 
-					analyze(x[c1], N, &rlslms_ptr, RAframe || RESET, &MccBuf);
+					analyze(x[c1], N, &rlslms_ptr, RAframe || RESET, IntRes, &MccBuf);
 					for(i=0;i<N;i++)									// Restore input
 					{
 						tmp = MccBuf.m_dmat[c1][i];
@@ -1766,7 +1840,7 @@ short CLpacEncoder::EncodeFrame()
 					}
 					bytes_2 = EncodeBlockCoding( &MccBuf, c1, MccBuf.m_dmat[c1], tmpbuf2, 0);
 
-					if (bytes_1>N*Res/8 || bytes_2>N*Res/8)
+					if (bytes_1>N*IntRes/8 || bytes_2>N*IntRes/8)
 					{
 						// Copy safe_mode_table
 						memcpy(&c_mode_table, &safe_mode_table, sizeof(mtable));
@@ -1775,7 +1849,7 @@ short CLpacEncoder::EncodeFrame()
 
 						// Redo everything
 						rlslms_ptr.channel = c0;
-						analyze(x[c0], N, &rlslms_ptr ,RAframe || RESET, &MccBuf);
+						analyze(x[c0], N, &rlslms_ptr ,RAframe || RESET, IntRes, &MccBuf);
 						for(i=0;i<N;i++) MccBuf.m_dmat[c0][i]=x[c0][i];
 						if(PITCH) 
 						{
@@ -1784,7 +1858,7 @@ short CLpacEncoder::EncodeFrame()
 						}					
 						bytes_1 = EncodeBlockCoding( &MccBuf, c0, MccBuf.m_dmat[c0], tmpbuf1, 0);
 						rlslms_ptr.channel = c1; 
-						analyze(x[c1], N, &rlslms_ptr, RAframe || RESET, &MccBuf);
+						analyze(x[c1], N, &rlslms_ptr, RAframe || RESET, IntRes, &MccBuf);
 						for(i=0;i<N;i++) MccBuf.m_dmat[c1][i]=x[c1][i];
 						if(PITCH) 
 						{
@@ -1808,7 +1882,7 @@ short CLpacEncoder::EncodeFrame()
 						MccBuf.m_dmat[c1][i]=x[c1][i];
 					}
 					rlslms_ptr.channel = c0;
-					analyze_joint(x[c0],x[c1],N, &rlslms_ptr, RAframe || RESET, &mono_frame, &MccBuf);
+					analyze_joint(x[c0],x[c1],N, &rlslms_ptr, RAframe || RESET, IntRes, &mono_frame, &MccBuf);
 					for(i=0;i<N;i++)						// Restore input
 					{
 						tmp = MccBuf.m_dmat[c0][i];
@@ -1833,7 +1907,7 @@ short CLpacEncoder::EncodeFrame()
 					}
 					bytes_2 = EncodeBlockCoding( &MccBuf, c1, MccBuf.m_dmat[c1], tmpbuf2, 0);
 
-					if (bytes_1>N*Res/8 || bytes_2>N*Res/8)
+					if (bytes_1>N*IntRes/8 || bytes_2>N*IntRes/8)
 					{
 						// Copy safe_mode_table
 						memcpy(&c_mode_table, &safe_mode_table, sizeof(mtable));
@@ -1845,7 +1919,7 @@ short CLpacEncoder::EncodeFrame()
 						xpr1=&MccBuf.m_xpara[c1];
 
 						rlslms_ptr.channel = c0;
-						analyze_joint(x[c0],x[c1],N, &rlslms_ptr, RAframe || RESET, &mono_frame, &MccBuf);
+						analyze_joint(x[c0],x[c1],N, &rlslms_ptr, RAframe || RESET, IntRes, &mono_frame, &MccBuf);
 						for(i=0;i<N;i++) MccBuf.m_dmat[c0][i]=x[c0][i];
 						if(PITCH) 
 						{
@@ -1881,7 +1955,7 @@ short CLpacEncoder::EncodeFrame()
 			c0 = sce+2*CPE;
 			for(i=0;i<N;i++) MccBuf.m_dmat[c0][i]=x[c0][i];		// Save input
 			rlslms_ptr.channel = c0;
-			analyze(x[c0], N, &rlslms_ptr, RAframe || RESET,  &MccBuf);
+			analyze(x[c0], N, &rlslms_ptr, RAframe || RESET, IntRes, &MccBuf);
 			for(i=0;i<N;i++)									// Restore input
 			{
 				tmp = MccBuf.m_dmat[c0][i];
@@ -1896,7 +1970,7 @@ short CLpacEncoder::EncodeFrame()
 			bytes_1 = EncodeBlockCoding( &MccBuf, c0, MccBuf.m_dmat[c0], tmpbuf1, 0);
 			RLSLMS_ext=0;
 
-			if (bytes_1>N*Res/8)
+			if (bytes_1>N*IntRes/8)
 			{
 				// Copy safe_mode_table
 				memcpy(&c_mode_table, &safe_mode_table, sizeof(mtable));
@@ -1906,7 +1980,7 @@ short CLpacEncoder::EncodeFrame()
 				// Redo everything
 				c0 = sce+2*CPE;	
 				rlslms_ptr.channel = c0;
-				analyze(x[c0], N, &rlslms_ptr, RAframe || RESET,  &MccBuf);
+				analyze(x[c0], N, &rlslms_ptr, RAframe || RESET, IntRes, &MccBuf);
 				for(i=0;i<N;i++) MccBuf.m_dmat[c0][i]=x[c0][i];
 				if(PITCH) 
 				{
@@ -2093,12 +2167,7 @@ short CLpacEncoder::EncodeFrame()
 		UINT BSflags;
 		unsigned short bshift, B1, Nb1;
 
-		if (Bsub >= 3)
-			BSflags = 0x7FFFFFFF;
-		else if (Bsub == 2)
-			BSflags = 0x70000000;
-		else if (Bsub == 1)
-			BSflags = 0x40000000;
+		BSflags = 0;
 
 		for (a = Bsub; a > 0; a--)		// levels (shortest to longest blocks)
 		{
@@ -2132,19 +2201,20 @@ short CLpacEncoder::EncodeFrame()
 					// copy last block from lower level (a) to upper level (a-1)
 					bits[b] = bpb[a][B1-1];
 					memcpy(buffer[a-1] + tmp_dest, buffer[a] + tmp_src, bpb[a][B1-1]);
+					BSflags |= (0x40000000 >> (bshift + b));			// 01223333 44444444 55555555 55555555
 				}
 				// Compare levels a and a-1
 				else if (bpb[a-1][b] > (tmp = bpb[a][2*b] + bpb[a][2*b+1]))	// two short blocks need less bits
 				{
 					bits[b] = tmp;
 					memcpy(buffer[a-1] + tmp_dest, buffer[a] + tmp_src, tmp);	// copy two short blocks into superior block
+					BSflags |= (0x40000000 >> (bshift + b));			// 01223333 44444444 55555555 55555555
 				}
 				else													// one long block needs less bits
 				{
 					bits[b] = bpb[a-1][b];
 					if (tmp_dest != tmp_org)
 						memmove(buffer[a-1] + tmp_dest, buffer[a-1] + tmp_org, bpb[a-1][b]);
-					BSflags &= ~(0x40000000 >> (bshift + b));			// 01223333 44444444 55555555 55555555
 				}
 				tmp_dest += bits[b];									// increment position in destination buffer
 				tmp_src += tmp;											// increment position in source buffer
@@ -2156,17 +2226,17 @@ short CLpacEncoder::EncodeFrame()
 		// end of partition choice ////////////////////////////////////////////////////////////////
 
 		// Compose frame data 
-		if (Bsub)
+		if (Sub)
 		{
 			// Use buffer[1] to rearrange data
 			short BSbits = 1;
 			buffer[1][0] = BSflags >> 24;
-			if (Bsub > 3)
+			if (Sub > 3)
 			{
 				BSbits = 2;
 				buffer[1][1] = (BSflags >> 16) & 0xFF;
 			}
-			if (Bsub == 5)
+			if (Sub == 5)
 			{
 				BSbits = 4;
 				buffer[1][2] = (BSflags >> 8) & 0xFF;
@@ -2332,7 +2402,7 @@ void CLpacEncoder::EncodeBlockAnalysis(MCC_ENC_BUFFER *pBuffer, long Channel, in
 		*xpr=1;
 	}
 	// CONSTANT BLOCK
-	else if (c = BlockIsConstant(x, N))
+	else if (c = BlockIsConstant(x, N, IntRes))
 	{
 		for(i=0;i<N;i++)
 			d[i]=c;
@@ -2524,7 +2594,7 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, int
 	long i, j;
 	int c;
 	/* rice code parameters for each coeff: */
-	struct pv {int m,s;} *parcor_vars;
+	struct pv {int m,s;} *parcor_vars = 0;
 
 	// 48kHz
 	static struct pv parcor_vars_0[20] = {
@@ -2617,11 +2687,11 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, int
 
 		// Number of separately coded samples in random access mode
 		if (RA)
-			num = optP < 3 ? optP : 3;
+			num = min(optP, min(N, 3));
 
-		s[0] = GetRicePara(d + num, Ns - num, sx);		// First subblock is num samples shorter in RA mode
+		s[0] = GetRicePara(d, num, Ns, sx);		// First subblock is num samples shorter in RA mode
 		for (j = 1; j < sub; j++)						// Remaining subblocks
-			s[j] = GetRicePara(d + j*Ns, Ns, sx + j);
+			s[j] = GetRicePara(d + j*Ns, 0, Ns, sx + j);
 
 		if (IntRes <= 16)
 		{
@@ -2694,16 +2764,16 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, int
 			}
 			if (sub != oldsub)
 			{
-				s[0] = GetRicePara(d + num, Ns - num, sx);
+				s[0] = GetRicePara(d, num, Ns, sx);
 				S[0] = (s[0] << 4) | sx[0];
 				// recalculate s and sx values
 				for (j = 1; j < sub; j++)
 				{
-					s[j] = GetRicePara(d + (j*Ns), Ns, sx + j);
+					s[j] = GetRicePara(d + (j*Ns), 0, Ns, sx + j);
 					S[j] = (s[j] << 4) | sx[j];
 				}
 				// check values
-				short maxS = Res <= 16 ? 255 : 511;	// 255=15*16+15, 511=31*16+15 (see above)
+				short maxS = IntRes <= 16 ? 255 : 511;	// 255=15*16+15, 511=31*16+15 (see above)
 				for (j = 0; j < sub; j++)
 				{
 					if (S[j] > maxS)
@@ -2741,7 +2811,7 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, int
 		// Code parameters for EC blocks
 		if (!BGMC)
 		{
-			short sbits = Res <= 16 ? 4 : 5;
+			short sbits = IntRes <= 16 ? 4 : 5;
 			out.WriteBits((UINT)s[0], sbits);	// direct coding of s[0]
 			for (j = 1; j < sub; j++)
 			{
@@ -2751,7 +2821,7 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, int
 		}
 		else
 		{
-			short sbits = Res <= 16 ? 8 : 9;
+			short sbits = IntRes <= 16 ? 8 : 9;
 			out.WriteBits((UINT)S[0], sbits);	// direct coding of S[0]
 			for (j = 1; j < sub; j++)
 			{
@@ -2779,12 +2849,19 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, int
 			}
 
 			/* encode coefs: */
-			for (i = 0; i < min(optP,20); i++)
-				rice_encode (asi[i] - parcor_vars[i].m, parcor_vars[i].s, &out.bio);
-			for (; i < min(optP,127); i++)
-				rice_encode (asi[i] - (i & 1), 2, &out.bio);
-			for (; i < optP; i++)
-				rice_encode (asi[i], 1, &out.bio);
+			if (parcor_vars != 0) {
+				for (i = 0; i < min(optP,20); i++)
+					rice_encode (asi[i] - parcor_vars[i].m, parcor_vars[i].s, &out.bio);
+				for (; i < min(optP,127); i++)
+					rice_encode (asi[i] - (i & 1), 2, &out.bio);
+				for (; i < optP; i++)
+					rice_encode (asi[i], 1, &out.bio);
+			}
+			else
+			{
+				for (i = 0; i < optP; i++)
+					out.WriteBits(asi[i] + 64, 7);
+			}
 		}
 
 		if (PITCH) 	pBuffer->m_Ltp.Encode( Channel, d, bytebuf, N, Freq, &out );
@@ -2805,12 +2882,12 @@ long CLpacEncoder:: EncodeBlockCoding(MCC_ENC_BUFFER *pBuffer, long Channel, int
 		else
 		{
 			// Progressive prediction: Separate entropy coding of the first 3 samples
-			short RiceLimit = ( Res <= 16 ) ? 15 : 31;
-			if (optP > 0)
-				out.WriteRice(d, Res-4, 1);
-			if (optP > 1)
+			short RiceLimit = ( IntRes <= 16 ) ? 15 : 31;
+			if (num > 0)
+				out.WriteRice(d, IntRes-4, 1);
+			if (num > 1)
 				out.WriteRice(d+1, min(s[0]+3, RiceLimit), 1);
-			if (optP > 2)
+			if (num > 2)
 				out.WriteRice(d+2, min(s[0]+1, RiceLimit), 1);
 
 			if (!BGMC)
@@ -2957,4 +3034,25 @@ void	CLpacEncoder::LTPanalysis( MCC_ENC_BUFFER* pBuffer, long Channel, long N, s
 		memcpy( pLtpBuf->m_pcoef_multi, inpitch.m_pcoef_multi, 5 * sizeof(short) );
 	}
 	delete[] dd0;
+}
+
+bool CLpacEncoder::EnforceProfiles()
+{
+	if (ALSProfIsMember(EnforcedProfiles, ALS_SIMPLE_PROFILE_L1)) {
+		// Check non-adjustable parameters
+		if (Chan > 2 || Freq > 48000 || Res > 16 || SampleType != 0)
+			return false;
+
+		// Limit the parameters
+		if (N > 4096)
+			N = 4096;
+		if (P > 15)
+			P = 15;
+		if (Sub > 3)
+			Sub = 3;
+		BGMC = 0;
+		RLSLMS = 0;
+	}
+
+	return true;
 }

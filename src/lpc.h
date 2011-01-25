@@ -42,6 +42,9 @@ contents : Header file for lpc.cpp
  * 02/06/2005, Tilman Liebchen <liebchen@nue.tu-berlin.de>
  *   - changed some parameters from short to long (e.g. block length N)
  *
+ * 12/25/2009, Csaba Kos <csaba.kos@as.ntt-at.co.jp>
+ *   - introduced the IntRes parameter to BlockIsConstant()
+ *
  *************************************************************************/
 
 void acf(double *x, long N, long k, short norm, double *rxx);
@@ -59,5 +62,5 @@ short GetResidualRA(int *x, long N, short P, short Q, int *par, int *cof, int *d
 short GetSignalRA(int *x, long N, short P, short Q, int *par, int *cof, int *d);
 
 short BlockIsZero(int *x, long N);
-int BlockIsConstant(int *x, long N);
+int BlockIsConstant(int *x, long N, short IntRes);
 short ShiftOutEmptyLSBs(int *x, long N);

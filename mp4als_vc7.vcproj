@@ -39,13 +39,13 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="lib/win/lpc_adapt_vc7_win32_debug.obj"
-				OutputFile="bin/win/Debug/mp4alsRM22rev2.exe"
+				OutputFile="bin/win/Debug/mp4alsRM23.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
 				IgnoreAllDefaultLibraries="FALSE"
 				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="TRUE"
-				ProgramDatabaseFile="./Debug/mp4alsRM22rev2.pdb"
+				ProgramDatabaseFile="./Debug/mp4alsRM23.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
@@ -103,10 +103,10 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="lib/win/lpc_adapt_vc7_win32_release.obj"
-				OutputFile="bin/win/Release/mp4alsRM22rev2.exe"
+				OutputFile="bin/win/Release/mp4alsRM23.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
-				ProgramDatabaseFile="./Release/mp4alsRM22rev2.pdb"
+				ProgramDatabaseFile="./Release/mp4alsRM23.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
@@ -203,6 +203,25 @@
 			</File>
 			<File
 				RelativePath="src\decoder.cpp">
+				<FileConfiguration
+					Name="Debug|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						PreprocessorDefinitions=""
+						BasicRuntimeChecks="3"
+						BrowseInformation="1"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="2"
+						PreprocessorDefinitions=""
+						BrowseInformation="1"/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="src\profiles.cpp">
 				<FileConfiguration
 					Name="Debug|Win32">
 					<Tool
@@ -434,6 +453,9 @@
 			</File>
 			<File
 				RelativePath="src\decoder.h">
+			</File>
+			<File
+				RelativePath="src\profiles.h">
 			</File>
 			<File
 				RelativePath="src\ec.h">
