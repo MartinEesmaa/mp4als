@@ -66,6 +66,7 @@ contents : Multi-channel correlation
 
 #include "mcc.h"
 #include "ec.h"
+#include <cstring>
 #include "bitio.h"
 #include "rn_bitio.h"
 

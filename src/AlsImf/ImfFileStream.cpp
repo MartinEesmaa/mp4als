@@ -125,7 +125,15 @@ int	fseek64_win( FILE* fp, __int64 offset, int origin )
 #define	FTRUNCATE64( a )	ftruncate( fileno( a ), ftello( a ) )
 
 #else
-#error Unknown compiler.
+
+#include	<unistd.h>
+
+// 64-bit functions
+#define	FOPEN64( a, b )		fopen( a, b )
+#define	FSEEK64( a, b, c )	fseeko( a, b, c )
+#define	FTELL64( a )		ftello( a )
+#define	FTRUNCATE64( a )	ftruncate( fileno( a ), ftello( a ) )
+
 #endif
 
 //////////////////////////////////////////////////////////////////////

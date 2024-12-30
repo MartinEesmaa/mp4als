@@ -60,6 +60,7 @@ contents : Recursive Least Square, Least Mean Square and related functions
 #include <assert.h>
 #include <stdlib.h>
 #include "lms.h"
+#include <cstring>
 
 #define MIN(a, b)  (((a) < (b)) ? (a) : (b)) 
 #define LEFT	0

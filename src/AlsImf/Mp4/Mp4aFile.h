@@ -82,6 +82,7 @@ Contents : MPEG-4 Audio reader and writer
 #include	"ImfStream.h"
 #include	"ImfBox.h"
 #include	"Mp4Box.h"
+#include	<ctime>
 
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
